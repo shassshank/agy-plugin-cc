@@ -66,6 +66,21 @@ curl -fsSL https://antigravity.google/cli/install.sh | bash
 If `agy` is installed but not logged in, run `agy` once interactively in your
 terminal to complete OAuth — or export `ANTIGRAVITY_API_KEY`.
 
+## Updating
+
+When a Claude Code session starts, the plugin checks whether a newer version
+has been published to this repo and, if so, shows a one-line notice. To update:
+
+```bash
+claude plugin marketplace update agy-plugin-cc
+claude plugin update agy@agy-plugin-cc
+```
+
+Then restart Claude Code. The check fetches
+[`plugin.json`](./plugins/agy/.claude-plugin/plugin.json) from GitHub at most
+once a day, times out after 3 seconds, and never blocks your session. Turn it
+off with `export AGY_NO_UPDATE_CHECK=1`.
+
 ## Usage
 
 ### Ask a quick question
@@ -190,7 +205,10 @@ Standard/Enterprise, or an enterprise GCP project. See the
 
 No. The plugin runs `agy` locally over a Bash wrapper. The wrapper only reads
 filesystem paths and your shell environment. Your prompts go directly to
-Google through `agy`'s normal channels.
+Google through `agy`'s normal channels. The only other request the plugin
+makes is the daily update check — a plain download of `plugin.json` from
+`raw.githubusercontent.com` that sends nothing about you or your code
+(disable with `AGY_NO_UPDATE_CHECK=1`).
 
 ### Can I keep using Antigravity outside this plugin?
 
