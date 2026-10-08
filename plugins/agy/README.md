@@ -13,6 +13,9 @@ full usage, see the [repo-level README](../../README.md).
   `agy:runner` subagent.
 - `scripts/agy-run.sh` — bash wrapper that locates `agy`, checks auth, and
   invokes `agy -p`.
+- `skills/usage-guide/` — when to use which command, model and flag.
+- `hooks/hooks.json` — SessionStart hooks: `scripts/check-update.sh` (update
+  notice) and `scripts/session-guide.sh` (injects a compact usage guide).
 
 ## Why this layout
 

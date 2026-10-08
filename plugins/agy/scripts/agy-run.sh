@@ -23,9 +23,11 @@ find_agy() {
 }
 
 auth_status() {
-  if [ -n "${ANTIGRAVITY_API_KEY:-}" ]; then
+  # agy reads GEMINI_API_KEY or GOOGLE_API_KEY (GOOGLE_API_KEY wins when
+  # both are set); OAuth sign-in stores a token file in its data directory.
+  if [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${GOOGLE_API_KEY:-}" ]; then
     echo "api-key"
-  elif [ -d "$HOME/.config/antigravity" ] || [ -d "$HOME/.gemini/antigravity-cli" ]; then
+  elif [ -s "$HOME/.gemini/antigravity-cli/antigravity-oauth-token" ]; then
     echo "oauth"
   else
     echo "missing"
@@ -64,10 +66,84 @@ require_ready() {
   fi
   if [ "$(auth_status)" = "missing" ]; then
     echo "error: agy is not authenticated." >&2
-    echo "       run \`agy\` once interactively, or export ANTIGRAVITY_API_KEY" >&2
+    echo "       run \`agy\` once interactively to sign in, or export GEMINI_API_KEY" >&2
     exit 1
   fi
   echo "$path"
+}
+
+# run_agy <agy-path> <agy args...>
+# Runs agy in JSON print mode so the conversation id can be surfaced for
+# follow-ups (`--conversation <id>`), then prints the plain response text
+# (or the `structured_output` object when --json-schema was used).
+# Falls back to agy's native text output when python3 is missing, when the
+# caller already chose an --output-format, or when AGY_PLAIN_OUTPUT=1.
+#
+# Time limit: callers may set `local default_print_timeout=<dur>`; it is
+# applied unless the args already carry --print-timeout. AGY_PRINT_TIMEOUT
+# overrides it for every command ("0" = no limit). agy reports a timeout
+# only on stderr (status stays SUCCESS), so that case exits 124.
+run_agy() {
+  local path="$1"; shift
+  local arg has_fmt=0 has_timeout=0
+  for arg in "$@"; do
+    case "$arg" in
+      --output-format|--output-format=*) has_fmt=1 ;;
+      --print-timeout|--print-timeout=*) has_timeout=1 ;;
+    esac
+  done
+  local timeout="${AGY_PRINT_TIMEOUT:-${default_print_timeout:-}}"
+  if [ "$has_timeout" -eq 0 ] && [ -n "$timeout" ] && [ "$timeout" != "0" ]; then
+    set -- "$@" --print-timeout "$timeout"
+  fi
+
+  if [ "$has_fmt" -eq 1 ] || [ "${AGY_PLAIN_OUTPUT:-}" = "1" ] \
+      || ! command -v python3 >/dev/null 2>&1; then
+    "$path" "$@"
+    return
+  fi
+
+  local out rc=0 err_file
+  err_file="$(mktemp "${TMPDIR:-/tmp}/agy_err.XXXXXX")"
+  out="$("$path" "$@" --output-format json 2>"$err_file")" || rc=$?
+  cat "$err_file" >&2
+  local timed_out=0
+  grep -q 'print timeout after' "$err_file" 2>/dev/null && timed_out=1
+  rm -f "$err_file"
+
+  printf '%s' "$out" | python3 -c '
+import json, sys
+raw = sys.stdin.read()
+try:
+    data = json.loads(raw)
+except ValueError:
+    data = None
+if not isinstance(data, dict):
+    sys.stdout.write(raw if raw.endswith("\n") or not raw else raw + "\n")
+    sys.exit(0)
+structured = data.get("structured_output")
+if structured is not None:
+    resp = json.dumps(structured, indent=2) + "\n"
+else:
+    resp = data.get("response") or ""
+sys.stdout.write(resp if resp.endswith("\n") or not resp else resp + "\n")
+cid = data.get("conversation_id")
+if cid:
+    sys.stdout.write("\n[agy] conversation: %s (follow up with --conversation %s)\n" % (cid, cid))
+status = data.get("status")
+if status and status != "SUCCESS":
+    sys.stderr.write("[agy] status: %s\n" % status)
+    if data.get("error"):
+        sys.stderr.write("[agy] error: %s\n" % data["error"])
+    sys.exit(3)
+' || { local prc=$?; [ "$rc" -eq 0 ] && rc="$prc"; }
+
+  if [ "$timed_out" -eq 1 ] && [ "$rc" -eq 0 ]; then
+    echo "[wrapper] agy hit the print timeout${timeout:+ ($timeout)}; the reply above is partial or empty." >&2
+    echo "[wrapper] continue it with --conversation <id>, or retry with a longer --print-timeout (0 = no limit)." >&2
+    rc=124
+  fi
+  return "$rc"
 }
 
 models_cache_file() {
@@ -182,15 +258,16 @@ cmd_ask() {
   local path
   path="$(require_ready)"
   if [ -n "$model" ]; then
-    "$path" -p "$prompt" --model "$model" "$@"
+    run_agy "$path" -p "$prompt" --model "$model" "$@"
   else
-    "$path" -p "$prompt" "$@"
+    run_agy "$path" -p "$prompt" "$@"
   fi
 }
 
 cmd_review() {
   local model=""
   local model_flag_seen=0
+  local base=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --model)
@@ -203,6 +280,20 @@ cmd_review() {
       --model=*)
         model_flag_seen=1
         model="${1#--model=}"
+        shift ;;
+      --base)
+        if [ $# -ge 2 ] && [ -n "$2" ]; then
+          base="$2"; shift 2
+        else
+          echo "error: --base requires a git ref (e.g. --base main)" >&2
+          exit 64
+        fi ;;
+      --base=*)
+        base="${1#--base=}"
+        if [ -z "$base" ]; then
+          echo "error: --base= requires a non-empty git ref" >&2
+          exit 64
+        fi
         shift ;;
       --)        shift; break ;;
       *)         break ;;
@@ -228,22 +319,106 @@ cmd_review() {
   local path
   path="$(require_ready)"
   local repo_dir="${CLAUDE_PROJECT_DIR:-$PWD}"
+  # Run from the repo root so tracked and untracked files cover the same scope.
+  repo_dir="$(git -C "$repo_dir" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$repo_dir")"
   local diff
-  diff="$(git -C "$repo_dir" diff HEAD 2>/dev/null || true)"
-  if [ -z "$diff" ]; then
-    diff="$(git -C "$repo_dir" diff 2>/dev/null || true)"
+  if [ -n "$base" ]; then
+    # Everything since the branch point: committed work plus uncommitted edits.
+    local merge_base
+    if ! merge_base="$(git -C "$repo_dir" merge-base "$base" HEAD 2>/dev/null)"; then
+      echo "error: cannot find a merge base between '$base' and HEAD in $repo_dir." >&2
+      exit 1
+    fi
+    diff="$(git -C "$repo_dir" diff "$merge_base" 2>/dev/null || true)"
+  else
+    diff="$(git -C "$repo_dir" diff HEAD 2>/dev/null || true)"
+    if [ -z "$diff" ]; then
+      diff="$(git -C "$repo_dir" diff 2>/dev/null || true)"
+    fi
   fi
+
+  # `git diff` never shows untracked files; append them as new-file diffs.
+  local untracked_diff="" f
+  while IFS= read -r -d '' f; do
+    untracked_diff+="$(git -C "$repo_dir" diff --no-index -- /dev/null "$f" 2>/dev/null || true)"$'\n'
+  done < <(git -C "$repo_dir" ls-files --others --exclude-standard -z 2>/dev/null)
+  if [ -n "$untracked_diff" ]; then
+    diff="${diff:+$diff$'\n'}$untracked_diff"
+  fi
+
   if [ -z "$diff" ]; then
     echo "error: no git diff found in $repo_dir. Stage or make changes first." >&2
     exit 1
   fi
+
+  # agy only takes the prompt as an argument, so a huge diff would hit the
+  # OS argument-size limit. Above the threshold, hand agy a file instead.
   local full
-  full=$(printf '%s\n\nDiff:\n```diff\n%s\n```\n' "$focus" "$diff")
-  if [ -n "$model" ]; then
-    "$path" -p "$full" --model "$model" "$@"
+  local max_inline="${AGY_REVIEW_MAX_INLINE_BYTES:-200000}"
+  local diff_bytes
+  diff_bytes="$(printf '%s' "$diff" | LC_ALL=C wc -c | tr -d '[:space:]')"
+  if [ "$diff_bytes" -gt "$max_inline" ]; then
+    AGY_REVIEW_TMP="$(mktemp -d "${TMPDIR:-/tmp}/agy_review.XXXXXX")"
+    # Global (not local) so the EXIT trap can still see it after return.
+    trap 'rm -rf "${AGY_REVIEW_TMP:-}"' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    printf '%s\n' "$diff" > "$AGY_REVIEW_TMP/review.diff"
+    full="$(printf '%s\n\nThe diff to review is too large to inline. Read it from this file (unified diff format): %s' \
+      "$focus" "$AGY_REVIEW_TMP/review.diff")"
+    set -- --add-dir "$AGY_REVIEW_TMP" "$@"
   else
-    "$path" -p "$full" "$@"
+    full=$(printf '%s\n\nDiff:\n```diff\n%s\n```\n' "$focus" "$diff")
   fi
+
+  local rc=0
+  local default_print_timeout="15m"
+  if [ -n "$model" ]; then
+    run_agy "$path" -p "$full" --model "$model" "$@" || rc=$?
+  else
+    run_agy "$path" -p "$full" "$@" || rc=$?
+  fi
+  if [ -n "${AGY_REVIEW_TMP:-}" ]; then
+    rm -rf "$AGY_REVIEW_TMP"
+    AGY_REVIEW_TMP=""
+  fi
+  return "$rc"
+}
+
+lower_ext() {
+  local base="${1##*/}"
+  local ext="${base##*.}"
+  [ "$ext" = "$base" ] && ext=""
+  printf '%s' "$ext" | tr '[:upper:]' '[:lower:]'
+}
+
+# copy_image <src> <dest>: copy, converting format when the extensions
+# disagree (agy usually saves JPEG; asking for out.png should give a PNG).
+copy_image() {
+  local src="$1" dest="$2"
+  local src_ext dest_ext
+  src_ext="$(lower_ext "$src")"
+  dest_ext="$(lower_ext "$dest")"
+  [ "$src_ext" = "jpg" ] && src_ext="jpeg"
+  [ "$dest_ext" = "jpg" ] && dest_ext="jpeg"
+
+  if [ -z "$dest_ext" ] || [ "$src_ext" = "$dest_ext" ]; then
+    cp "$src" "$dest"
+    echo "[wrapper] copied to: $dest"
+    return 0
+  fi
+  if command -v sips >/dev/null 2>&1 \
+      && sips -s format "$dest_ext" "$src" --out "$dest" >/dev/null 2>&1; then
+    echo "[wrapper] converted $src_ext -> $dest_ext: $dest"
+    return 0
+  fi
+  if command -v magick >/dev/null 2>&1 && magick "$src" "$dest" >/dev/null 2>&1; then
+    echo "[wrapper] converted $src_ext -> $dest_ext: $dest"
+    return 0
+  fi
+  cp "$src" "$dest"
+  echo "[wrapper] copied to: $dest"
+  echo "[wrapper] warning: source is .$src_ext but $dest was requested and no converter (sips/magick) was available; the file contents are still $src_ext." >&2
 }
 
 cmd_image() {
@@ -319,20 +494,20 @@ cmd_image() {
     name_clause=" Save the image with name \"${name}\"."
   fi
   local prompt
-  prompt="Use your built-in generate_image tool to create the following image. Description: ${description}.${name_clause}
+  prompt="Use your built-in image generation (the image-generator subagent / generate_image tool) to create the following image. Description: ${description}.${name_clause}
 
 After the tool returns, you MUST end your reply with a single line in this exact format (no quotes, no markdown, nothing after it):
 IMAGE_PATH: <absolute filesystem path to the saved image>
 
 The IMAGE_PATH line is required — the calling wrapper parses it to locate the file."
 
-  local response rc
+  local response rc=0
+  local default_print_timeout="10m"
   if [ -n "$model" ]; then
-    response="$("$agy_path" -p "$prompt" --model "$model" 2>&1)" || rc=$?
+    response="$(run_agy "$agy_path" -p "$prompt" --model "$model" 2>&1)" || rc=$?
   else
-    response="$("$agy_path" -p "$prompt" 2>&1)" || rc=$?
+    response="$(run_agy "$agy_path" -p "$prompt" 2>&1)" || rc=$?
   fi
-  rc="${rc:-0}"
   printf '%s\n' "$response"
 
   local src
@@ -344,15 +519,14 @@ The IMAGE_PATH line is required — the calling wrapper parses it to locate the 
   if [ -z "$src" ] || [ ! -f "$src" ]; then
     src="$(printf '%s' "$response" \
       | grep -oE '/[^[:space:]]+\.(png|jpg|jpeg|webp)' \
-      | head -n1)"
+      | head -n1 || true)"
   fi
 
   if [ -n "$src" ] && [ -f "$src" ]; then
     echo
     echo "[wrapper] generated: $src"
     if [ -n "$output" ]; then
-      cp "$src" "$output"
-      echo "[wrapper] copied to: $output"
+      copy_image "$src" "$output"
     fi
   else
     echo
@@ -373,7 +547,9 @@ Slash commands
                                         Hand a task to the agy:runner subagent.
   /agy:research [--background] [--model M] <topic>
                                         Deep-research investigation via agy:runner.
-  /agy:review [--model M] [focus]       Send current `git diff` to agy for review.
+  /agy:review [--model M] [--base REF] [focus]
+                                        Review uncommitted changes (incl. untracked
+                                        files), or everything since REF with --base.
   /agy:image [--model M] [--name S] [--output P] <description>
                                         Generate an image via agy's built-in tool.
   /agy:models                           List available models with recommended use cases.
@@ -398,12 +574,33 @@ How --model works
   If an invalid model is provided, agy rejects it and prints its list
   of available models. Run /agy:models or `agy models` for the live list.
 
-Underlying CLI
-  Run `agy --help` for agy's own flags: --add-dir, -c/--continue,
-  --conversation, --dangerously-skip-permissions, -i/--prompt-interactive,
-  --log-file, -p/--print, --print-timeout, --sandbox.
+Follow-ups (multi-turn)
+  /agy:ask, /agy:delegate, /agy:research and /agy:review end with a line
+    [agy] conversation: <id>
+  Pass `--conversation <id>` on the next call to continue that same agy
+  conversation with its full history (agy keeps it server-side).
+  Set AGY_PLAIN_OUTPUT=1 to get agy's raw text output without this line.
 
-  Subcommands: changelog, help, install, models, plugin/plugins, update.
+Useful agy-native flags (passed straight through)
+  --effort low|medium|high|xhigh|max   Reasoning effort for this call.
+  --conversation <id>                  Continue a previous conversation.
+  --add-dir <path>                     Add a directory to agy's workspace.
+  --sandbox                            Run with terminal restrictions.
+  --print-timeout 10m                  Cap the run. Defaults: review 15m,
+                                       image 10m, ask/delegate/research none.
+                                       AGY_PRINT_TIMEOUT overrides (0 = none).
+  --json-schema <json|file>            Enforce a structured (object) reply.
+
+Exit codes
+  0 ok · 1 not authenticated / no diff / bad model · 3 agy model or agent
+  error, e.g. no model capacity (see the `[agy] error:` / AGY_ERROR line on
+  stderr; any partial response is still printed) · 64 bad wrapper usage ·
+  124 print timeout hit (partial reply; follow up with --conversation) ·
+  127 agy not installed.
+
+Underlying CLI
+  Run `agy --help` for agy's own flags. Subcommands: agents, changelog,
+  help, install, mcp, models, plugin/plugins, remote-control, update.
 HELP
 }
 

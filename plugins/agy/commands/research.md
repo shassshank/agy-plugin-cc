@@ -1,6 +1,6 @@
 ---
 description: Delegate a thorough research investigation to the agy:runner subagent
-argument-hint: "[--background] [--model <model>] <topic or question>"
+argument-hint: "[--background] [--model <model>] [--effort <level>] <topic or question>"
 allowed-tools: Agent
 ---
 
@@ -26,10 +26,11 @@ sections (Background, Key findings, Caveats, Sources).
 Topic: <topic text here>
 ```
 
-(Strip only the `--background` flag. If `--model <name>` is present in the
-request, preserve `--model <name>` at the very front of the prompt text handed
-to `agy:runner` so runner can extract and forward it. Strip `--model` from the
-`<topic text here>` section.)
+(Strip only the `--background` flag. If `--model <name>`, `--effort <level>`
+or `--conversation <id>` are present in the request, preserve them at the very
+front of the prompt text handed to `agy:runner` so runner can extract and
+forward them. Strip them from the `<topic text here>` section. `--effort high`
+is a good choice for research when the user did not specify one.)
 
 Then invoke the `agy:runner` subagent with that prompt as
 `subagent_type: "agy:runner"`.

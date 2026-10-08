@@ -471,7 +471,7 @@
 </header>
 
 <main class="hero">
-  <span class="eyebrow">v0.0.2 · open source · MIT</span>
+  <span class="eyebrow">v0.0.4 · open source · MIT</span>
   <h1>Delegate tasks to Google <span class="grad">Antigravity</span> from inside Claude Code.</h1>
   <p class="lede">
     A small open-source plugin that wraps the <code class="inline">agy</code> CLI.
@@ -509,7 +509,7 @@
         <div class="step-num" aria-hidden="true"></div>
         <div>
           <h3 class="step-title">Install the plugin</h3>
-          <p class="step-desc">Pulls v0.0.2 into the user-scope plugin cache.</p>
+          <p class="step-desc">Pulls v0.0.4 into the user-scope plugin cache.</p>
           <div class="code">
             <button class="copy-btn" data-copy="/plugin install agy@agy-plugin-cc">Copy</button>
 <pre>/plugin install agy@agy-plugin-cc</pre>
@@ -551,7 +551,7 @@
       <div class="tile">
         <span class="tile-cmd">/agy:ask</span>
         <h3 class="tile-title">One-shot prompt</h3>
-        <p class="tile-desc">Send a single prompt to <code class="inline">agy</code> and stream the answer back into Claude Code, verbatim.</p>
+        <p class="tile-desc">Send a single prompt to <code class="inline">agy</code> and get the answer back verbatim. Continue the same agy conversation with <code class="inline">--conversation &lt;id&gt;</code>.</p>
       </div>
       <div class="tile">
         <span class="tile-cmd">/agy:delegate</span>
@@ -571,7 +571,7 @@
       <div class="tile">
         <span class="tile-cmd">/agy:review</span>
         <h3 class="tile-title">Second-opinion review</h3>
-        <p class="tile-desc">Pipe the current <code class="inline">git diff</code> into <code class="inline">agy</code> for a steerable review with optional focus text.</p>
+        <p class="tile-desc">Send your uncommitted changes (untracked files included), or a whole branch with <code class="inline">--base main</code>, to <code class="inline">agy</code> for a steerable review.</p>
       </div>
       <div class="tile">
         <span class="tile-cmd">/agy:models</span>
@@ -601,6 +601,14 @@
           <li>
             <strong>Long jobs in the background.</strong>
             <span>Subagents in Claude Code run in the background and notify you when they finish. A natural fit for <code class="inline">--background</code> research, refactors, or CI investigations.</span>
+          </li>
+          <li>
+            <strong>Claude knows which options to use.</strong>
+            <span>A session-start guide tells Claude which <code class="inline">/agy:*</code> command and flags fit each task — <code class="inline">--effort</code>, <code class="inline">--base</code>, <code class="inline">--json-schema</code>, timeouts — and how to handle errors.</span>
+          </li>
+          <li>
+            <strong>Follow-ups keep their context.</strong>
+            <span>Every reply carries an agy conversation id; pass <code class="inline">--conversation &lt;id&gt;</code> to continue where agy left off instead of starting over.</span>
           </li>
           <li>
             <strong>No runtime baggage.</strong>

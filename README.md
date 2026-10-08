@@ -21,9 +21,10 @@ just Bash and `agy`.
   deep-research investigation; wraps the topic in a structured prompt and
   routes through `agy:runner`.
 - **`/agy:image [--name <slug>] [--output <path>] [--model <model>] <description>`** — generate an image with `agy`'s built-in
-  `generate_image` tool (Imagen under the hood).
-- **`/agy:review [--model <model>] [focus]`** — ask Antigravity to review your current
-  `git diff`.
+  `image-generator` subagent (Imagen under the hood).
+- **`/agy:review [--model <model>] [--base <ref>] [focus]`** — ask Antigravity
+  to review your uncommitted changes (including untracked files), or a whole
+  branch with `--base main`.
 - **`/agy:models`** — list available models with curated recommendations.
 - **`/agy:help`** — show all commands and model selection guide.
 - **`agy:runner` subagent** — thin forwarding wrapper around the Antigravity
@@ -36,8 +37,8 @@ just Bash and `agy`.
   (`/plugin marketplace add …`).
 - **Antigravity CLI (`agy`)** installed locally. `/agy:setup` can install it
   on first run.
-- **Auth** for `agy`: either OAuth cached in the system keyring (after one
-  interactive run of `agy`) or `ANTIGRAVITY_API_KEY` exported in your shell.
+- **Auth** for `agy`: either OAuth sign-in (after one interactive run of
+  `agy`) or `GEMINI_API_KEY` exported in your shell.
 - **Bash** and **git** in `PATH`. macOS, Linux, or WSL.
 
 ## Install
@@ -64,7 +65,7 @@ curl -fsSL https://antigravity.google/cli/install.sh | bash
 ```
 
 If `agy` is installed but not logged in, run `agy` once interactively in your
-terminal to complete OAuth — or export `ANTIGRAVITY_API_KEY`.
+terminal to complete OAuth — or export `GEMINI_API_KEY`.
 
 ## Updating
 
@@ -89,7 +90,21 @@ off with `export AGY_NO_UPDATE_CHECK=1`.
 /agy:ask explain the difference between Go channels and Rust async in one paragraph
 ```
 
-Returns Antigravity's response verbatim.
+Returns Antigravity's response verbatim, followed by a
+`[agy] conversation: <id>` line.
+
+### Follow up in the same agy conversation
+
+Pass that id back with `--conversation` to continue where agy left off, with
+its full history:
+
+```text
+/agy:ask --conversation 5c9b18f9-... now write tests for the function you proposed
+/agy:delegate --conversation 5c9b18f9-... also update the README for that change
+```
+
+Set `AGY_PLAIN_OUTPUT=1` to get agy's raw text output without the
+conversation line.
 
 ### Delegate a task to the `agy:runner` subagent
 
@@ -120,7 +135,14 @@ Stage or make some changes, then:
 ```text
 /agy:review
 /agy:review focus on error handling and concurrency safety
+/agy:review --base main          # everything on this branch since main
 ```
+
+Untracked files are included, scoped to the whole repo even from a
+subdirectory. Very large diffs are handed to agy as a temporary file instead
+of being inlined in the prompt. Reviews stop after 15 minutes by default
+(`--print-timeout <dur>` or `AGY_PRINT_TIMEOUT` to change; `0` = no limit);
+a timed-out run exits `124` and can be continued with `--conversation <id>`.
 
 ### Pick a specific model
 
@@ -135,6 +157,12 @@ Pass either the model's exact identifier (e.g. `claude-opus-4-6-thinking`,
 `gemini-3.8-flash-high`) or canonical display label (e.g.
 `"Claude Opus 4.6 (Thinking)"`). Run `/agy:models` to view all available
 models alongside curated recommendations.
+
+Tune reasoning depth on any call with `--effort low|medium|high|xhigh|max`:
+
+```text
+/agy:ask --effort high is this lock-free queue actually linearizable?
+```
 
 If no `--model` is given, the wrapper omits the flag and `agy` uses its own
 default. Project-local `AGENTS.md` and `GEMINI.md` files are read directly
@@ -158,10 +186,12 @@ investigations work well in `--background`.
 /agy:image --name hero --output ./assets/hero.png isometric illustration of a developer at a desk
 ```
 
-Triggers `agy`'s built-in `generate_image` tool. The image is written to
-the Antigravity artifacts dir (e.g.
-`~/.gemini/antigravity-cli/brain/<uuid>/<name>.png`). Pass `--output` if
-you want the wrapper to copy it next to your project.
+Hands the request to `agy`'s built-in `image-generator` subagent. The image
+is written to the Antigravity artifacts dir (e.g.
+`~/.gemini/antigravity-cli/brain/<uuid>/<name>.jpg`). Pass `--output` if
+you want the wrapper to copy it next to your project; if the extension you
+ask for differs (e.g. `.png`), it is converted with `sips` (macOS) or
+ImageMagick.
 
 ## How it works
 
@@ -175,10 +205,25 @@ Claude Code  →  /agy:*  →  agy:runner subagent  →  agy-run.sh  →  agy -p
   local `agy` binary, your local auth, and your local config.
 - The wrapper script
   ([`plugins/agy/scripts/agy-run.sh`](./plugins/agy/scripts/agy-run.sh))
-  handles binary discovery, auth detection, and exit codes.
+  handles binary discovery, auth detection, and exit codes. It runs agy in
+  JSON print mode to surface the conversation id, and exits `3` (with an
+  `[agy] error:` line) when agy reports a model/agent error such as no
+  model capacity — even in cases where agy itself exits 0 — and `124` when
+  `--print-timeout` cut the run short.
 - The `agy:runner` subagent is a *forwarder*: it invokes the wrapper exactly
   once per request and returns Antigravity's output verbatim. No
   reinterpretation.
+
+## Built-in guidance for Claude
+
+A `SessionStart` hook ([`session-guide.sh`](./plugins/agy/scripts/session-guide.sh))
+adds a short "which agy command and flag to use when" guide to Claude's
+context on startup, resume, `/clear` and compaction. It tells Claude, for
+example, to reuse `--conversation <id>` for follow-ups instead of `-c`, when
+to raise `--effort`, when to use `--base` or `--json-schema`, and how to
+handle exit codes `3` and `124`. The longer version lives in the
+`agy:usage-guide` skill. Turn the hook off with
+`export AGY_NO_SESSION_GUIDE=1`.
 
 ## Configuration
 

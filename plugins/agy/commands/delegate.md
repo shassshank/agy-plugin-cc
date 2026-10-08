@@ -1,6 +1,6 @@
 ---
 description: Delegate a task to the Antigravity (`agy`) runner subagent; supports background execution and model selection
-argument-hint: "[--background] [--model <model>] <task description>"
+argument-hint: "[--background] [--model <model>] [--effort <level>] [--conversation <id>] <task description>"
 allowed-tools: Agent
 ---
 
@@ -21,6 +21,11 @@ $ARGUMENTS
   forward it to the wrapper script as `--model "<name>"`.
 - If no model is given, omit `--model` entirely and let `agy` use its own
   default.
+- Likewise preserve any other leading agy-native flags (`--effort <level>`,
+  `--conversation <id>`, `--sandbox`, `--add-dir <path>`) at the front of the
+  prompt text; the runner forwards them to the wrapper.
+- To follow up on an earlier delegation, pass the `--conversation <id>` from
+  that run's `[agy] conversation:` line — agy resumes with its full history.
 
 Models can be specified by exact id (e.g. `gemini-3.8-flash-high`,
 `claude-opus-4-6-thinking`) or canonical display label (e.g.

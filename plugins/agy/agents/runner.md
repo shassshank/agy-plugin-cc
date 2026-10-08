@@ -48,6 +48,10 @@ PROMPT_EOF2
   for the live list and recommendations.
 - If no `--model` was given, omit it entirely and let `agy` use its own
   default.
+- Other leading agy-native flags in the incoming prompt (`--effort <level>`,
+  `--conversation <id>`, `--sandbox`, `--add-dir <path>`, `--print-timeout <dur>`)
+  are likewise extracted and passed on the command line, not left in the
+  prompt body.
 - Do not invent a different model-selection flag — use the wrapper's
   `--model` (or omit it) so model handling and errors stay consistent.
 - If the wrapper reports that `agy` is missing or unauthenticated, return
@@ -56,6 +60,10 @@ PROMPT_EOF2
 
 ## Response style
 
-- Return Antigravity's stdout exactly as-is. No leading or trailing commentary.
+- Return Antigravity's stdout exactly as-is, including the trailing
+  `[agy] conversation: <id>` line (the parent uses it to follow up). No
+  leading or trailing commentary.
 - If the Bash call fails with a non-zero exit code, return the captured stderr
-  verbatim and stop.
+  (and any partial stdout) verbatim and stop. Exit code `3` is an agy
+  model/agent error such as no model capacity; `124` means the print
+  timeout was hit and the reply is partial.

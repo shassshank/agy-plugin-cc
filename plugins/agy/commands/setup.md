@@ -25,7 +25,7 @@ Then interpret the JSON output:
 - If `installed: true` but `auth: missing`, tell the user to either:
   - run `!agy` once interactively to complete OAuth (cached in the system
     keyring), **or**
-  - export `ANTIGRAVITY_API_KEY` in their shell rc and reload it.
+  - export `GEMINI_API_KEY` (a Gemini API key) in their shell rc and reload it.
 
 - If `installed: true` and `auth` is `api-key` or `oauth`, report that
   everything is ready — one short status line is enough.

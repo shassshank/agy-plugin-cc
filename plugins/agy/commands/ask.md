@@ -1,6 +1,6 @@
 ---
 description: Run a one-shot prompt through the Antigravity CLI and return its output verbatim
-argument-hint: "[--model <model>] <prompt>"
+argument-hint: "[--model <model>] [--effort <level>] [--conversation <id>] <prompt>"
 allowed-tools: Bash(bash:*)
 ---
 
@@ -37,6 +37,11 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/agy-run.sh" ask --model <model> <<'PROMPT_EO
 PROMPT_EOF2
 ```
 
+Other leading agy-native flags — `--effort <low|medium|high|xhigh|max>`,
+`--conversation <id>`, `--sandbox`, `--add-dir <path>`, `--print-timeout <dur>`
+— are also extracted and passed as arguments before the heredoc, e.g.
+`ask --effort high --conversation <id> <<'PROMPT_EOF2'`.
+
 Pass the model's exact identifier (e.g. `claude-opus-4-6-thinking`,
 `gemini-3.8-flash-high`) or canonical display label (e.g. `"Claude Opus 4.6 (Thinking)"`).
 Run `/agy:models` to see available models and recommendations.
@@ -46,5 +51,11 @@ Notes:
 - If the wrapper reports `agy is not installed` or `not authenticated`, stop
   and tell the user to run `/agy:setup`.
 - If the user's request is empty, ask what they want to ask Antigravity.
+- The output ends with `[agy] conversation: <id>`. Keep it in the reply: the
+  user (or you) can continue the same agy conversation, with its full
+  history, by passing `--conversation <id>` on the next `/agy:ask`.
+- Exit code `3` means agy hit a model/agent error (e.g. no model capacity);
+  relay the `[agy] error:` line and any partial response, and suggest
+  retrying or picking another model with `--model`.
 - For multi-step or long-running work, suggest `/agy:delegate`, which routes
   through the `agy:runner` subagent and supports `--background`.

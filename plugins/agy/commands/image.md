@@ -4,9 +4,9 @@ argument-hint: "[--name <slug>] [--output <path>] [--model <model>] <description
 allowed-tools: Bash(bash:*)
 ---
 
-Ask `agy` to generate an image. The Antigravity CLI ships a native
-`generate_image` tool (Imagen under the hood) that triggers automatically
-when the prompt asks for an image — the wrapper builds the right prompt and
+Ask `agy` to generate an image. The Antigravity CLI hands image requests to
+its built-in `image-generator` subagent (Imagen under the hood), which checks
+each result and retries up to three times — the wrapper builds the right prompt and
 extracts the saved file path.
 
 The user's request:
@@ -22,7 +22,9 @@ Parse the user's request:
 - `--name <slug>` — optional. Filename slug `agy` should save the image
   under (no extension).
 - `--output <path>` — optional. Local path the wrapper should copy the
-  generated file to after `agy` finishes.
+  generated file to after `agy` finishes. agy usually saves JPEG; if the
+  extension differs (e.g. `.png`), the wrapper converts it with `sips`
+  (macOS) or ImageMagick, and warns if neither is available.
 - `--model <model>` — optional. Model to use (id or display label, see `/agy:models`).
 - The remaining text — the description of what to generate.
 
