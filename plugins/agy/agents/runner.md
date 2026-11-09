@@ -1,7 +1,7 @@
 ---
 name: runner
 description: Forward a task to the Google Antigravity CLI (`agy`). Use proactively when the parent thread should delegate a focused coding, debugging, refactor, or research task to Antigravity — or when the user says "ask agy", "delegate to agy", "run this through Antigravity", or "let Gemini take this".
-model: sonnet
+model: haiku
 tools: Bash
 skills:
   - antigravity-cli
@@ -49,7 +49,8 @@ PROMPT_EOF2
 - If no `--model` was given, omit it entirely and let `agy` use its own
   default.
 - Other leading agy-native flags in the incoming prompt (`--effort <level>`,
-  `--conversation <id>`, `--sandbox`, `--add-dir <path>`, `--print-timeout <dur>`)
+  `--conversation <id>`, `--sandbox`, `--add-dir <path>`, `--print-timeout <dur>`,
+  `--mode plan`, `--disable-slash-commands`, `--json-schema '<schema>'`)
   are likewise extracted and passed on the command line, not left in the
   prompt body.
 - Do not invent a different model-selection flag — use the wrapper's

@@ -53,14 +53,27 @@ Flags go before the prompt text; the wrapper forwards them to `agy`. A compact v
 | Review a whole branch, not just uncommitted edits | `/agy:review --base main` | — |
 | Need machine-readable output | `--json-schema '<object schema>'` (wrapper prints the structured object) | parsing free text |
 | Task needs files outside the repo | `--add-dir <path>` | — |
-| "Plan only, don't edit" | say so in the prompt | `--mode plan` (ignored headless; agy may still edit) |
+| "Plan first, don't edit yet" | `--mode plan`; agy writes a plan and stops. Carry it out with `--conversation <id>` "proceed" (no `--mode plan`) | relying on prompt wording alone |
+| Prompt text starts with `/` but isn't an agy skill (e.g. a path) | `--disable-slash-commands` | letting agy expand it as one of its own slash commands |
 | User asked for restricted / unattended execution | `--sandbox` / `--dangerously-skip-permissions` | either one unprompted |
 | Long task, user wants to keep working | `--background` on `/agy:delegate` or `/agy:research` | — |
+
+## Token efficiency
+Each handoff costs the prompt you write plus agy's full reply, which is relayed verbatim into this conversation. Keep both small:
+- **Reuse conversations**: follow-ups go through `--conversation <id>`; never re-send context agy already has.
+- **Reference, don't paste**: give file paths and let agy read the repo (`--add-dir` for outside paths). Don't paste file contents or diffs; `/agy:review` collects the diff itself.
+- **Ask for compact output**: request a short summary or a list of changed files, or use `--json-schema` for exactly the fields you need.
+- **Match model and effort to the task**: a flash model with `--effort low` for lookups and trivial edits. Reserve `high`/`xhigh`/`max` and the Pro/Opus tiers for genuinely hard problems.
+- **Don't block on long work**: `--background` on `/agy:delegate` and `/agy:research`, with `--print-timeout` to bound runaway runs.
+- **Plan before big edits**: `--mode plan` lets you check agy's approach cheaply before it touches files.
+- The `agy:runner` subagent runs on `haiku` because it only forwards one wrapper call. Don't give it reasoning work.
+- Skip agy for tasks that need this conversation's context unless you can state that context in a few lines.
 
 ## Handling results
 - Relay agy's output verbatim, including the `[agy] conversation:` line.
 - Exit `3`: model/agent error (e.g. no capacity). Relay the `[agy] error:` line; retry once or suggest another `--model`.
 - Exit `124`: print timeout hit; the reply is partial. Continue with `--conversation <id>` or retry with a longer `--print-timeout`.
 - Exit `1` "not authenticated" or `127`: tell the user to run `/agy:setup`.
+- `[agy] denied actions` on stderr: agy was blocked from some actions (permissions or policy). Tell the user what was skipped; don't silently retry with `--dangerously-skip-permissions`.
 
 See `/agy:help` for full flag syntax and `/agy:models` for the live model list.

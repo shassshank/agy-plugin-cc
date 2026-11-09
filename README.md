@@ -205,13 +205,15 @@ Claude Code  →  /agy:*  →  agy:runner subagent  →  agy-run.sh  →  agy -p
   local `agy` binary, your local auth, and your local config.
 - The wrapper script
   ([`plugins/agy/scripts/agy-run.sh`](./plugins/agy/scripts/agy-run.sh))
-  handles binary discovery, auth detection, and exit codes. It runs agy in
+  handles binary discovery, auth detection, and exit codes. It also prints
+  any actions agy was denied (`[agy] denied actions`) on stderr. It runs agy in
   JSON print mode to surface the conversation id, and exits `3` (with an
   `[agy] error:` line) when agy reports a model/agent error such as no
   model capacity — even in cases where agy itself exits 0 — and `124` when
   `--print-timeout` cut the run short.
 - The `agy:runner` subagent is a *forwarder*: it invokes the wrapper exactly
-  once per request and returns Antigravity's output verbatim. No
+  once per request and returns Antigravity's output verbatim. It runs on
+  `haiku`, since forwarding needs no heavy reasoning. No
   reinterpretation.
 
 ## Built-in guidance for Claude

@@ -132,6 +132,11 @@ sys.stdout.write(resp if resp.endswith("\n") or not resp else resp + "\n")
 cid = data.get("conversation_id")
 if cid:
     sys.stdout.write("\n[agy] conversation: %s (follow up with --conversation %s)\n" % (cid, cid))
+denied = data.get("denied_actions")
+if denied:
+    sys.stderr.write("[agy] denied actions (%d) — agy was not allowed to do these:\n" % len(denied))
+    for item in denied:
+        sys.stderr.write("  - %s\n" % (item if isinstance(item, str) else json.dumps(item)))
 if data.get("finished_reason") == "print_timeout":
     sys.exit(124)
 status = data.get("status")
@@ -594,6 +599,11 @@ Useful agy-native flags (passed straight through)
                                        image 10m, ask/delegate/research none.
                                        AGY_PRINT_TIMEOUT overrides (0 = none).
   --json-schema <json|file>            Enforce a structured (object) reply.
+  --mode plan                          Plan only: agy writes a plan and stops
+                                       without editing. Carry it out with
+                                       --conversation <id> "proceed".
+  --disable-slash-commands             Send a prompt that starts with "/"
+                                       literally instead of as an agy skill.
 
 Exit codes
   0 ok · 1 not authenticated / no diff / bad model · 3 agy model or agent

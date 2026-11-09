@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.6] - 2026-11-09
+
+Makes Claude's use of the plugin cheaper and covers newer agy 1.5 features.
+
+### Added
+- Token-efficiency guidance in the `agy:usage-guide` skill and the
+  SessionStart guide: reuse `--conversation`, reference files by path, ask
+  for compact output, match model and effort to the task, use
+  `--background` for long work, plan before big edits.
+- `--mode plan` is documented for "plan first" work. On agy 1.5.3 headless
+  runs, agy now writes a plan and stops without editing; a follow-up with
+  `--conversation <id>` carries it out.
+- `--disable-slash-commands` is documented for prompts that start with `/`
+  but are not agy skills.
+- The wrapper prints `[agy] denied actions (N)` on stderr when agy's JSON
+  result lists actions it was not allowed to take.
+
+### Changed
+- The `agy:runner` subagent now runs on `haiku` instead of `sonnet`. It only
+  forwards one wrapper call, so the cheaper model is enough.
+
+### Fixed
+- Docs no longer claim `--mode plan` is ignored in headless runs.
+
 ## [0.0.5] - 2026-11-09
 
 Brings the plugin up to date with Antigravity CLI 1.5.x (tested on 1.5.3).

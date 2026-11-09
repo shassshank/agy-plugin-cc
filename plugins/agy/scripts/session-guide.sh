@@ -35,10 +35,17 @@ Flags (put them before the prompt text; they are forwarded to agy)
 - --add-dir <path>: when the task needs files outside the current repo.
 - --json-schema '<object schema>': when you need machine-readable output; the wrapper prints the structured object.
 - --sandbox: only if the user asks for restricted execution. --dangerously-skip-permissions: only on explicit user request.
-- Do not use --mode plan for "plan only" work: headless agy ignores it and may still edit files. Ask for a plan in the prompt instead.
+- --mode plan: for "plan first, don't edit yet" work; agy writes a plan and stops. To carry it out, follow up with --conversation <id> "proceed" (without --mode plan).
+- --disable-slash-commands: when the prompt text starts with "/" but is not an agy skill (e.g. a path); otherwise agy expands it as one of its own slash commands.
+
+Efficiency
+- Point agy at files by path; it reads the repo itself. Don't paste file contents or diffs (/agy:review collects the diff itself).
+- Ask for compact output (a short summary, or --json-schema) — agy's whole reply is relayed into this conversation.
+- Simple lookups: a flash model with --effort low. Save high/xhigh/max effort for genuinely hard problems.
+- Long work: --background so this session keeps going, plus --print-timeout to bound it.
 
 Results
-- Relay agy's output verbatim, keeping the "[agy] conversation:" line.
+- Relay agy's output verbatim, keeping the "[agy] conversation:" line. A "[agy] denied actions" line on stderr means agy was blocked from something — tell the user what.
 - Exit 3 = model/agent error (e.g. no capacity): relay the [agy] error line, then retry once or suggest another --model. Exit 124 = timed out with a partial reply: continue with --conversation <id> or a longer --print-timeout. Exit 1 "not authenticated" or 127 = tell the user to run /agy:setup.
 - agy cannot see this conversation: include file paths, the goal and what is already ruled out in the prompt.
 GUIDE

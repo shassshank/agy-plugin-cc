@@ -63,6 +63,11 @@ Run `agy --help` for the full list. Useful ones:
 - `--add-dir <path>` — add a directory to the workspace (repeatable).
 - `--json-schema '<json>'` — enforce a structured reply (root must be an
   object schema); the wrapper prints agy's `structured_output` object.
+- `--mode plan` — agy writes a plan and stops without editing.
+- `--disable-slash-commands` — send a prompt starting with `/` literally.
+
+If agy reports actions it was not allowed to do, the wrapper prints
+`[agy] denied actions (N)` on stderr; return it verbatim with the rest.
 
 ## What this skill does NOT do
 
