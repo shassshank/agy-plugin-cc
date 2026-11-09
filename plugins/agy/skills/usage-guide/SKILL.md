@@ -34,9 +34,9 @@ Every `/agy:ask`, `/agy:delegate`, `/agy:research` and `/agy:review` run ends wi
 | `/agy:help` | Command reference, invocation syntax, and flag documentation. |
 
 ## Model-selection strategy
-Run `/agy:models` as the live source of truth for available models. Use `--effort low|medium|high|xhigh|max` to tune reasoning depth on any call. Rule of thumb:
+Run `/agy:models` as the live source of truth for available models; the list depends on how the user signs in (Google account, API key or Vertex AI), so don't assume a model id exists without checking. Use `--effort low|medium|high|xhigh|max` to tune reasoning depth on any call. Rule of thumb:
 - **Fast lookups & simple edits**: Flash tier (`gemini-3.8-flash-high` / `-medium` / `-low`) for low-latency, low-cost tasks.
-- **Hard multi-step & architecture**: `gemini-3.1-pro-high` or `claude-opus-4-6-thinking` for deep reasoning and complex debugging.
+- **Hard multi-step & architecture**: a Gemini Pro id if `agy models` lists one (e.g. `gemini-*-pro-high`), or `claude-opus-4-6-thinking` for deep reasoning and complex debugging.
 - **Everyday coding & review**: `claude-sonnet-4-6` for balanced speed, code quality, and diff evaluation.
 - **Second opinions**: `gpt-oss-120b-medium` for open-weight diversity checks and alternative reasoning angles.
 

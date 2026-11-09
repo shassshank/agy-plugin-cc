@@ -81,8 +81,10 @@ require_ready() {
 #
 # Time limit: callers may set `local default_print_timeout=<dur>`; it is
 # applied unless the args already carry --print-timeout. AGY_PRINT_TIMEOUT
-# overrides it for every command ("0" = no limit). agy reports a timeout
-# only on stderr (status stays SUCCESS), so that case exits 124.
+# overrides it for every command ("0" = no limit). A timed-out turn is
+# detected from `finished_reason: "print_timeout"` in the JSON result
+# (agy >= 1.4.11) or the `[agy] print timeout after` stderr line, and exits
+# 124 whatever agy's own exit code was (agy >= 1.5.0 exits 3, older 0).
 run_agy() {
   local path="$1"; shift
   local arg has_fmt=0 has_timeout=0
@@ -130,15 +132,17 @@ sys.stdout.write(resp if resp.endswith("\n") or not resp else resp + "\n")
 cid = data.get("conversation_id")
 if cid:
     sys.stdout.write("\n[agy] conversation: %s (follow up with --conversation %s)\n" % (cid, cid))
+if data.get("finished_reason") == "print_timeout":
+    sys.exit(124)
 status = data.get("status")
 if status and status != "SUCCESS":
     sys.stderr.write("[agy] status: %s\n" % status)
     if data.get("error"):
         sys.stderr.write("[agy] error: %s\n" % data["error"])
     sys.exit(3)
-' || { local prc=$?; [ "$rc" -eq 0 ] && rc="$prc"; }
+' || { local prc=$?; [ "$prc" -eq 124 ] && timed_out=1; [ "$rc" -eq 0 ] && rc="$prc"; }
 
-  if [ "$timed_out" -eq 1 ] && [ "$rc" -eq 0 ]; then
+  if [ "$timed_out" -eq 1 ]; then
     echo "[wrapper] agy hit the print timeout${timeout:+ ($timeout)}; the reply above is partial or empty." >&2
     echo "[wrapper] continue it with --conversation <id>, or retry with a longer --print-timeout (0 = no limit)." >&2
     rc=124
@@ -558,12 +562,12 @@ Slash commands
 Model selection (--model)
   Pass the model's exact identifier or display label from `agy models`
   (or run /agy:models for a curated list with recommended use cases).
+  The list depends on how you sign in (Google account, API key, Vertex AI).
 
   Examples:
     --model claude-opus-4-6-thinking
     --model "Claude Opus 4.6 (Thinking)"
     --model gemini-3.8-flash-high
-    --model "Gemini 3.1 Pro (High)"
 
 How --model works
   The plugin forwards the model value directly to agy's own native

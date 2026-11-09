@@ -115,6 +115,12 @@ def main():
         rows.append((model_id, label))
 
     parsed = {model_id: parse(model_id) for model_id, _ in rows}
+    # Some ids carry no tier token but their display label does, e.g.
+    # claude-sonnet-4-6 -> "Claude Sonnet 4.6 (Thinking)".
+    for model_id, label in rows:
+        family, version, tier = parsed[model_id]
+        if tier is None and "(thinking)" in label.lower():
+            parsed[model_id] = (family, version, "thinking")
 
     latest_in_group = {}
     for model_id, (family, version, tier) in parsed.items():

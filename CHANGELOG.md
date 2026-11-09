@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.5] - 2026-11-09
+
+Brings the plugin up to date with Antigravity CLI 1.5.x (tested on 1.5.3).
+
+### Fixed
+- Print timeouts were reported as model errors (exit `3`) instead of exit
+  `124` on agy 1.5.0+, which now exits `3` when `--print-timeout` cuts a
+  turn short. The wrapper now reads `finished_reason: "print_timeout"` from
+  agy's JSON result (agy 1.4.11+), falls back to the stderr
+  `[agy] print timeout after` line on older versions, and exits `124` with
+  the follow-up hint whatever agy's own exit code was.
+- `/agy:models` gave `claude-sonnet-4-6` a generic description; ids with no
+  tier token now take it from the display label, e.g. `(Thinking)`.
+
+### Changed
+- Docs and examples no longer name `gemini-3.1-pro-high`, which is not
+  offered to every account. They now say that `agy models` depends on how
+  you sign in.
+
 ## [0.0.4] - 2026-10-08
 
 Brings the plugin up to date with Antigravity CLI 1.3.x.

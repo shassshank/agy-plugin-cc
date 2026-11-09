@@ -148,7 +148,7 @@ a timed-out run exits `124` and can be continued with `--conversation <id>`.
 
 ```text
 /agy:delegate --model claude-sonnet-4-6 fix the off-by-one in pagination
-/agy:delegate --model gemini-3.1-pro-high write a high-coverage test for the cache layer
+/agy:delegate --model claude-opus-4-6-thinking write a high-coverage test for the cache layer
 /agy:ask --model claude-opus-4-6-thinking "explain Go's escape analysis"
 /agy:review --model gemini-3.8-flash-high
 ```
