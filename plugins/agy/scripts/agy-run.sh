@@ -796,7 +796,7 @@ for r in runs:
     if r.get("label"): print("  task:  %s" % r["label"][:100])
     bits = []
     if steps: bits.append("steps %d/%d%s" % (done, len(steps), (" — now: " + current[:70]) if current else ""))
-    if r.get("tools"): bits.append("%d tool calls" % r["tools"])
+    if r.get("tools"): bits.append("%d tool call%s" % (r["tools"], "" if r["tools"] == 1 else "s"))
     if r.get("edited"): bits.append("edited: " + ", ".join(r["edited"][:5]))
     if bits: print("  " + " · ".join(bits))
     if r.get("last"): print("  last:  %s" % r["last"][:140])
