@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.9] - 2026-11-25
+
+### Added
+- `/agy:cleanup` (`agy-run.sh cleanup [--stop] [--all] [<id>...]`): removes
+  the run records `/agy:status` shows. By default only finished runs started
+  by the current Claude session; `--stop` also ends that session's running
+  agy runs; `--all` covers every session. agy's own conversation history is
+  kept (agy has no headless delete), so `--conversation <id>` still works.
+- The SessionStart guide and the usage-guide skill tell Claude to run
+  `/agy:cleanup` itself once it is done using agy for a task.
+- Run records now note the Claude session and wrapper process that started
+  them.
+
 ## [0.0.8] - 2026-11-25
 
 Live progress for agy runs, built on agy's `--output-format stream-json`.

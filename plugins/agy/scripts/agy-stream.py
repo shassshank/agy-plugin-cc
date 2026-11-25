@@ -38,6 +38,10 @@ QUIET_TOOLS = {"update_steps"}  # shown through the checklist instead
 state = {
     "pid": os.getpid(),
     "label": LABEL,
+    # Who started the run, so `cleanup` only touches this Claude session's
+    # runs and `cleanup --stop` can end agy (a child of the wrapper).
+    "claude_session": os.environ.get("AGY_CLAUDE_SESSION", ""),
+    "wrapper_pid": int(os.environ.get("AGY_WRAPPER_PID") or 0) or None,
     "cwd": os.getcwd(),
     "model": "",
     "conversation_id": "",

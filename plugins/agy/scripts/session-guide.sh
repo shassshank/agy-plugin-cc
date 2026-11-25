@@ -27,6 +27,7 @@ Commands
 - /agy:image — any generated image (the only image-generation path); --output <path> to place it in the project (format converted to match the extension).
 - /agy:models — check the live model list before naming a model you are unsure exists.
 - /agy:status — progress of running/recent agy runs (background delegations too): steps, tool calls, edited files; /agy:status <id> for one run's log.
+- /agy:cleanup — remove this session's finished agy run records. Run it yourself once you are done using agy for the current task (results relayed, no agy run still pending). Add --stop only to end a run of yours you no longer need. Follow-ups with --conversation <id> keep working after cleanup.
 
 Flags (put them before the prompt text; they are forwarded to agy)
 - --model <id>: only when the user asks or the task clearly needs it. Fast/cheap: gemini-*-flash-*; strong default: gemini-4-hydrogen-high; hardest reasoning: gemini-4-hydrogen-xhigh or claude-opus-*-thinking; second opinion from another family: gpt-oss-*. Otherwise omit and let agy choose.

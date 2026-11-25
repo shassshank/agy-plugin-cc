@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # agy-run.sh — Claude Code wrapper around Google Antigravity CLI (`agy`).
-# Subcommands: check | ask | review | image | models | status | help.
+# Subcommands: check | ask | review | image | models | status | cleanup | help.
 # `--model` is passed straight through to agy's own native --model flag.
 
 set -euo pipefail
@@ -206,7 +206,8 @@ run_agy_stream() {
   err_file="$(mktemp "${TMPDIR:-/tmp}/agy_err.XXXXXX")"
   set +e
   "$path" "$@" --output-format stream-json 2>"$err_file" \
-    | AGY_RUN_LABEL="$label" python3 "$script_dir/agy-stream.py" "$log_file" "$status_file"
+    | AGY_RUN_LABEL="$label" AGY_CLAUDE_SESSION="${CLAUDE_CODE_SESSION_ID:-}" AGY_WRAPPER_PID="$$" \
+      python3 "$script_dir/agy-stream.py" "$log_file" "$status_file"
   local -a st=("${PIPESTATUS[@]}")
   set -e
   rc="${st[0]}"; prc="${st[1]:-0}"
@@ -783,7 +784,7 @@ if want:
 if not show_all:
     runs = [r for r in runs if r.get("status") == "running" or now - r.get("updated", 0) < 3600]
 if not runs:
-    print("no agy runs in the last hour (use --all for older ones)")
+    print("no agy runs recorded" if show_all else "no agy runs in the last hour (use --all for older ones)")
     sys.exit(0)
 for r in runs:
     steps = r.get("steps") or []
@@ -801,6 +802,121 @@ for r in runs:
     if bits: print("  " + " · ".join(bits))
     if r.get("last"): print("  last:  %s" % r["last"][:140])
     print("  run:   %s  (/agy:status %s shows its log)" % (r["run_id"], r["run_id"]))
+PY
+}
+
+# cleanup [--stop] [--all] [<conversation-id|run-id>...]: delete run
+# records (progress log + status file) once Claude is done with them.
+# Default scope: finished runs started by this Claude session
+# (CLAUDE_CODE_SESSION_ID). --all widens it to every session's finished
+# runs. --stop also ends this session's still-running agy runs (SIGTERM to
+# agy, the wrapper's child) and removes their records. Ids select runs
+# explicitly (finished ones, or running ones with --stop). agy's own
+# conversation history is not touched: agy has no headless way to delete
+# a conversation, and `--conversation <id>` keeps working afterwards.
+cmd_cleanup() {
+  local stop=0 all=0 ids=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --stop) stop=1 ;;
+      --all) all=1 ;;
+      -*) echo "error: unknown cleanup flag '$1'" >&2; exit 64 ;;
+      *) ids+=("$1") ;;
+    esac
+    shift
+  done
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "error: cleanup needs python3." >&2
+    exit 1
+  fi
+  python3 - "$(runs_dir)" "$stop" "$all" "${CLAUDE_CODE_SESSION_ID:-}" "${ids[@]+"${ids[@]}"}" <<'PY'
+import glob, json, os, signal, subprocess, sys, time
+d, stop, all_sessions, session = sys.argv[1], sys.argv[2] == "1", sys.argv[3] == "1", sys.argv[4]
+ids = set(sys.argv[5:])
+
+def alive(pid):
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except (OSError, ValueError, TypeError):
+        return False
+
+def stop_run(st):
+    """SIGTERM the agy process(es) under the run's wrapper."""
+    wpid = st.get("wrapper_pid")
+    if not wpid or not alive(wpid):
+        return False
+    try:
+        kids = subprocess.run(["pgrep", "-P", str(wpid)], capture_output=True, text=True).stdout.split()
+    except OSError:
+        kids = []
+    hit = False
+    for k in kids:
+        try:
+            cmd = subprocess.run(["ps", "-o", "command=", "-p", k], capture_output=True, text=True).stdout
+        except OSError:
+            cmd = ""
+        if "agy" in cmd and "agy-stream.py" not in cmd:
+            try:
+                os.kill(int(k), signal.SIGTERM)
+                hit = True
+            except OSError:
+                pass
+    return hit
+
+removed, stopped, kept_running, skipped_other = [], [], 0, 0
+for path in sorted(glob.glob(os.path.join(d, "*.json"))):
+    try:
+        with open(path, encoding="utf-8") as f:
+            st = json.load(f)
+    except (OSError, ValueError):
+        st = {}
+    run_id = os.path.basename(path)[:-5]
+    running = st.get("status") == "running" and alive(st.get("pid"))
+    named = bool(ids) and (run_id in ids or st.get("conversation_id") in ids)
+    mine = bool(session) and st.get("claude_session") == session
+    if ids and not named:
+        continue
+    if not ids and not (mine or all_sessions):
+        skipped_other += 1
+        continue
+    if running:
+        if not (stop and (mine or named)):
+            kept_running += 1
+            continue
+        if stop_run(st):
+            stopped.append(st.get("conversation_id") or run_id)
+            # Let agy-stream.py see EOF and write its last status first,
+            # or it would recreate the record after we delete it.
+            for _ in range(50):
+                if not alive(st.get("pid")):
+                    break
+                time.sleep(0.1)
+    for p in (path, path[:-5] + ".log"):
+        try:
+            os.remove(p)
+        except OSError:
+            pass
+    removed.append(run_id)
+
+for log in glob.glob(os.path.join(d, "*.log")):
+    if not os.path.exists(log[:-4] + ".json") and (all_sessions or log[:-4].rsplit("/", 1)[-1] in ids):
+        try:
+            os.remove(log)
+        except OSError:
+            pass
+
+msg = "removed %d agy run record%s" % (len(removed), "" if len(removed) == 1 else "s")
+if stopped:
+    msg += "; stopped %d running agy run%s (%s)" % (len(stopped), "" if len(stopped) == 1 else "s", ", ".join(stopped))
+print(msg + ".")
+if kept_running:
+    print("kept %d running run%s (pass --stop to end %s)." % (
+        kept_running, "" if kept_running == 1 else "s", "it" if kept_running == 1 else "them"))
+if skipped_other and not removed:
+    print("%d record%s from other or earlier Claude sessions left alone (use --all)." % (
+        skipped_other, "" if skipped_other == 1 else "s"))
+print("agy's own conversation history is unchanged; --conversation <id> still works.")
 PY
 }
 
@@ -826,6 +942,9 @@ Slash commands
   /agy:models                           List available models with recommended use cases.
   /agy:status [--all] [ID]              Progress of agy runs (background delegations
                                         included); ID shows one run's progress log.
+  /agy:cleanup [--stop] [--all] [ID...] Remove this session's finished run records
+                                        (--stop also ends its running agy runs;
+                                        --all: every session's finished runs).
   /agy:help                             This help.
 
 Model selection (--model)
@@ -907,6 +1026,7 @@ main() {
     image)   shift;     cmd_image "$@" ;;
     models)             cmd_models ;;
     status)  shift;     cmd_status "$@" ;;
+    cleanup) shift;     cmd_cleanup "$@" ;;
     help|-h|--help|"")  cmd_help ;;
     *)                  echo "error: unknown subcommand '$1'" >&2; cmd_help >&2; exit 64 ;;
   esac

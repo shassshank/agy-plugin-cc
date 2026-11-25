@@ -28,6 +28,9 @@ just Bash and `agy`.
 - **`/agy:models`** — list available models with curated recommendations.
 - **`/agy:status`** — progress of running and recent agy runs (background
   delegations too): step checklist, tool calls, edited files, last activity.
+- **`/agy:cleanup`** — remove this session's finished agy run records
+  (`--stop` also ends its running runs). Claude runs it itself when it is
+  done with agy for a task.
 - **`/agy:help`** — show all commands and model selection guide.
 - **`agy:runner` subagent** — thin forwarding wrapper around the Antigravity
   CLI; available as `subagent_type: "agy:runner"` for programmatic

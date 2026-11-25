@@ -58,6 +58,7 @@ Flags go before the prompt text; the wrapper forwards them to `agy`. A compact v
 | Prompt text starts with `/` but isn't an agy skill (e.g. a path) | `--disable-slash-commands` | letting agy expand it as one of its own slash commands |
 | User asked for restricted / unattended execution | `--sandbox` / `--dangerously-skip-permissions` | either one unprompted |
 | Long task, user wants to keep working | `--background` on `/agy:delegate` or `/agy:research` | — |
+| Done using agy for the current task (results relayed, nothing pending) | `/agy:cleanup` — removes this session's finished run records; `--conversation <id>` still works afterwards | leaving records behind; `--all` or `--stop` unless the user asked or you abandoned a run of yours |
 | "How is the agy task going?" / checking a background delegation | `/agy:status` (step progress, tool calls, edited files, last activity); `/agy:status <id>` for its log | waiting blindly, or starting a second copy |
 
 ## Token efficiency
@@ -70,6 +71,9 @@ Each handoff costs the prompt you write plus agy's full reply, which is relayed 
 - **Plan before big edits**: `--mode plan` lets you check agy's approach cheaply before it touches files.
 - The `agy:runner` subagent runs on `haiku` because it only forwards one wrapper call. Don't give it reasoning work.
 - Skip agy for tasks that need this conversation's context unless you can state that context in a few lines.
+
+## Cleaning up
+When the agy work for a task is finished and its results are relayed, run `/agy:cleanup` (or `bash "${CLAUDE_PLUGIN_ROOT}/scripts/agy-run.sh" cleanup`). It deletes only finished runs started by this Claude session and keeps running ones. If you started a background run you no longer need, end it with `/agy:cleanup --stop <id>`. Don't wait for the user to ask. agy's own conversation history stays, so later follow-ups with `--conversation <id>` still work.
 
 ## Handling results
 - Relay agy's output verbatim, including the `[agy] conversation:` line.
