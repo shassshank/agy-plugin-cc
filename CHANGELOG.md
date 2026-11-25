@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.8] - 2026-11-25
+
+Live progress for agy runs, built on agy's `--output-format stream-json`.
+
+### Added
+- `/agy:status` (`agy-run.sh status [--all] [<id>]`): shows running and
+  recent agy runs, background delegations included, with agy's step
+  checklist (`steps 2/5 — now: …`), tool calls, edited files and the latest
+  activity. With a conversation or run id it prints that run's progress
+  log. Run history is kept for two days in
+  `~/.cache/agy-plugin-cc/runs/`.
+- Every run prints `[agy] conversation: <id> (started)` on stderr as soon
+  as agy starts, so a run that is killed or cut off can still be resumed
+  with `--conversation <id>`.
+- An `[agy] summary:` line at the end of each run: steps done, tool calls
+  by name, edited files, duration and tokens.
+- `AGY_PROGRESS=1` streams the progress lines to stderr live (useful with
+  a backgrounded Bash call).
+
+### Changed
+- The wrapper runs agy with `--output-format stream-json` and processes the
+  events in the new `scripts/agy-stream.py`. The reply, the
+  `[agy] conversation:` line, `structured_output` handling and the exit
+  codes (`3`, `124`) are unchanged. `AGY_STREAM=0` restores the single
+  `--output-format json` result.
+
 ## [0.0.7] - 2026-11-25
 
 Brings the plugin up to date with Antigravity CLI 1.5.16 (tested on 1.5.16).

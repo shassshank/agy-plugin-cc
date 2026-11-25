@@ -31,8 +31,13 @@ The wrapper:
   native `--model` flag for that call.
 - Forwards any extra arguments straight to `agy` — so
   `… ask --sandbox <<'PROMPT_EOF2' …` becomes `agy -p "<prompt>" --sandbox`.
-- Runs agy with `--output-format json` (when `python3` exists), prints the
-  plain response, then a final `[agy] conversation: <id>` line. Passing
+- Runs agy with `--output-format stream-json` (when `python3` exists):
+  prints `[agy] conversation: <id> (started)` on stderr at launch, keeps a
+  per-run progress log (read by `status` / `/agy:status`), then prints the
+  plain response, a final `[agy] conversation: <id>` line, and an
+  `[agy] summary:` line on stderr (steps, tool calls, edited files, time,
+  tokens). `AGY_STREAM=0` uses a single `--output-format json` result
+  instead. Passing
   `--conversation <id>` on a later call resumes that conversation with its
   full history. `AGY_PLAIN_OUTPUT=1` disables this.
 

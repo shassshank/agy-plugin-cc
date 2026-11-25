@@ -26,6 +26,7 @@ Commands
 - /agy:review — independent, read-only review of uncommitted changes (untracked files included); --base main for a whole branch. Give focus text when the user has a concern.
 - /agy:image — any generated image (the only image-generation path); --output <path> to place it in the project (format converted to match the extension).
 - /agy:models — check the live model list before naming a model you are unsure exists.
+- /agy:status — progress of running/recent agy runs (background delegations too): steps, tool calls, edited files; /agy:status <id> for one run's log.
 
 Flags (put them before the prompt text; they are forwarded to agy)
 - --model <id>: only when the user asks or the task clearly needs it. Fast/cheap: gemini-*-flash-*; strong default: gemini-4-hydrogen-high; hardest reasoning: gemini-4-hydrogen-xhigh or claude-opus-*-thinking; second opinion from another family: gpt-oss-*. Otherwise omit and let agy choose.
@@ -46,7 +47,7 @@ Efficiency
 - Long work: --background so this session keeps going, plus --print-timeout to bound it.
 
 Results
-- Relay agy's output verbatim, keeping the "[agy] conversation:" line. A "[agy] denied actions" line on stderr means agy was blocked from something — tell the user what.
+- Relay agy's output verbatim, keeping the "[agy] conversation:" line. The "[agy] summary:" line lists steps, tool calls and edited files — use it rather than asking agy what it changed. "[agy] conversation: <id> (started)" appears at launch, so even a killed run can be resumed. A "[agy] denied actions" line on stderr means agy was blocked from something — tell the user what.
 - Exit 3 = model/agent error (e.g. no capacity): relay the [agy] error line, then retry once or suggest another --model. Exit 124 = timed out with a partial reply: continue with --conversation <id> or a longer --print-timeout. Exit 1 "not authenticated" or 127 = tell the user to run /agy:setup.
 - agy cannot see this conversation: include file paths, the goal and what is already ruled out in the prompt.
 GUIDE

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # agy-run.sh — Claude Code wrapper around Google Antigravity CLI (`agy`).
-# Subcommands: check | ask | review | image | models | help.
+# Subcommands: check | ask | review | image | models | status | help.
 # `--model` is passed straight through to agy's own native --model flag.
 
 set -euo pipefail
@@ -170,6 +170,61 @@ add_read_only_guard() {
   return 0
 }
 
+runs_dir() {
+  local d="${XDG_CACHE_HOME:-$HOME/.cache}/agy-plugin-cc/runs"
+  mkdir -p "$d" 2>/dev/null && chmod 700 "$d" 2>/dev/null
+  printf '%s' "$d"
+}
+
+# run_agy_stream <agy-path> <agy args...>: the default path of run_agy.
+# Runs agy with --output-format stream-json and pipes the events through
+# agy-stream.py, which prints the conversation id as soon as the run
+# starts, keeps a progress log + status file per run (read by `status`),
+# and finally prints the same reply / `[agy] conversation:` line / exit
+# code that the single-JSON mode does. Expects run_agy's locals
+# (timeout) to be visible.
+run_agy_stream() {
+  local path="$1"; shift
+  local script_dir dir run_id log_file status_file label="" prev="" a
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  for a in "$@"; do
+    if [ "$prev" = "-p" ]; then label="$a"; break; fi
+    prev="$a"
+  done
+  label="${label%%$'\n'*}"
+  label="${label:0:120}"
+
+  dir="$(runs_dir)"
+  run_id="$(date +%Y%m%d-%H%M%S)-$$"
+  log_file="$dir/$run_id.log"
+  status_file="$dir/$run_id.json"
+  [ -d "$dir" ] || { log_file=""; status_file=""; }
+  # Keep two days of run history.
+  find "$dir" -maxdepth 1 \( -name '*.log' -o -name '*.json' \) -mtime +2 -delete 2>/dev/null || true
+
+  local err_file rc=0 prc=0
+  err_file="$(mktemp "${TMPDIR:-/tmp}/agy_err.XXXXXX")"
+  set +e
+  "$path" "$@" --output-format stream-json 2>"$err_file" \
+    | AGY_RUN_LABEL="$label" python3 "$script_dir/agy-stream.py" "$log_file" "$status_file"
+  local -a st=("${PIPESTATUS[@]}")
+  set -e
+  rc="${st[0]}"; prc="${st[1]:-0}"
+  cat "$err_file" >&2
+  local timed_out=0
+  grep -q 'print timeout after' "$err_file" 2>/dev/null && timed_out=1
+  rm -f "$err_file"
+  [ "$prc" -eq 124 ] && timed_out=1
+  [ "$rc" -eq 0 ] && rc="$prc"
+
+  if [ "$timed_out" -eq 1 ]; then
+    echo "[wrapper] agy hit the print timeout${timeout:+ ($timeout)}; the reply above is partial or empty." >&2
+    echo "[wrapper] continue it with --conversation <id>, or retry with a longer --print-timeout (0 = no limit)." >&2
+    rc=124
+  fi
+  return "$rc"
+}
+
 # run_agy <agy-path> <agy args...>
 # Runs agy in JSON print mode so the conversation id can be surfaced for
 # follow-ups (`--conversation <id>`), then prints the plain response text
@@ -200,6 +255,11 @@ run_agy() {
   if [ "$has_fmt" -eq 1 ] || [ "${AGY_PLAIN_OUTPUT:-}" = "1" ] \
       || ! command -v python3 >/dev/null 2>&1; then
     "$path" "$@"
+    return
+  fi
+
+  if [ "${AGY_STREAM:-1}" != "0" ]; then
+    run_agy_stream "$path" "$@"
     return
   fi
 
@@ -653,6 +713,97 @@ The IMAGE_PATH line is required — the calling wrapper parses it to locate the 
   return "$rc"
 }
 
+# status [--all] [<conversation-id|run-id>]: show agy runs started through
+# this wrapper (newest first) from the per-run status files that
+# agy-stream.py writes. Without --all, finished runs older than an hour
+# are left out. With an id, print that run's progress log.
+cmd_status() {
+  local all=0 want=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --all) all=1 ;;
+      -*) echo "error: unknown status flag '$1'" >&2; exit 64 ;;
+      *) want="$1" ;;
+    esac
+    shift
+  done
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "error: status needs python3." >&2
+    exit 1
+  fi
+  python3 - "$(runs_dir)" "$all" "$want" <<'PY'
+import glob, json, os, sys, time
+d, show_all, want = sys.argv[1], sys.argv[2] == "1", sys.argv[3]
+now = time.time()
+
+def alive(pid):
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except (OSError, ValueError, TypeError):
+        return False
+
+def ago(t):
+    s = max(0, int(now - t))
+    if s < 90: return "%ds" % s
+    if s < 5400: return "%dm" % (s // 60)
+    return "%dh%02dm" % (s // 3600, s % 3600 // 60)
+
+runs = []
+for path in glob.glob(os.path.join(d, "*.json")):
+    try:
+        with open(path, encoding="utf-8") as f:
+            st = json.load(f)
+    except (OSError, ValueError):
+        continue
+    st["run_id"] = os.path.basename(path)[:-5]
+    st["log"] = path[:-5] + ".log"
+    if st.get("status") == "running" and not alive(st.get("pid")):
+        st["status"] = "ended without a result (killed?)"
+    runs.append(st)
+runs.sort(key=lambda r: r.get("started", 0), reverse=True)
+
+if want:
+    match = [r for r in runs if want in (r.get("conversation_id"), r["run_id"])]
+    if not match:
+        print("no agy run with id %s in %s" % (want, d)); sys.exit(1)
+    r = match[0]
+    print("run %s · %s · conversation %s" % (r["run_id"], r.get("status"), r.get("conversation_id") or "?"))
+    try:
+        with open(r["log"], encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        lines = []
+    tail = lines[-40:]
+    if len(lines) > len(tail):
+        print("… %d earlier lines in %s" % (len(lines) - len(tail), r["log"]))
+    print("\n".join(tail))
+    sys.exit(0)
+
+if not show_all:
+    runs = [r for r in runs if r.get("status") == "running" or now - r.get("updated", 0) < 3600]
+if not runs:
+    print("no agy runs in the last hour (use --all for older ones)")
+    sys.exit(0)
+for r in runs:
+    steps = r.get("steps") or []
+    done = sum(1 for s in steps if s.get("status") in ("done", "completed", "skipped"))
+    current = next((s.get("title") for s in steps if s.get("status") == "in_progress"), "")
+    head = "%-9s %s · started %s ago · updated %s ago" % (
+        r.get("status", "?"), r.get("conversation_id") or "(no conversation yet)",
+        ago(r.get("started", now)), ago(r.get("updated", now)))
+    print(head)
+    if r.get("label"): print("  task:  %s" % r["label"][:100])
+    bits = []
+    if steps: bits.append("steps %d/%d%s" % (done, len(steps), (" — now: " + current[:70]) if current else ""))
+    if r.get("tools"): bits.append("%d tool calls" % r["tools"])
+    if r.get("edited"): bits.append("edited: " + ", ".join(r["edited"][:5]))
+    if bits: print("  " + " · ".join(bits))
+    if r.get("last"): print("  last:  %s" % r["last"][:140])
+    print("  run:   %s  (/agy:status %s shows its log)" % (r["run_id"], r["run_id"]))
+PY
+}
+
 cmd_help() {
   cat <<'HELP'
 /agy:* commands (Claude Code plugin for the Antigravity CLI)
@@ -673,6 +824,8 @@ Slash commands
   /agy:image [--model M] [--name S] [--output P] <description>
                                         Generate an image via agy's built-in tool.
   /agy:models                           List available models with recommended use cases.
+  /agy:status [--all] [ID]              Progress of agy runs (background delegations
+                                        included); ID shows one run's progress log.
   /agy:help                             This help.
 
 Model selection (--model)
@@ -700,6 +853,16 @@ Follow-ups (multi-turn)
   Pass `--conversation <id>` on the next call to continue that same agy
   conversation with its full history (agy keeps it server-side).
   Set AGY_PLAIN_OUTPUT=1 to get agy's raw text output without this line.
+
+Progress (stream-json)
+  The wrapper runs agy with --output-format stream-json. It prints
+    [agy] conversation: <id> (started) — progress: <log file>
+  on stderr as soon as agy starts (so even a killed run can be resumed),
+  logs agy's step checklist and tool calls per run, and ends with
+    [agy] summary: 3/3 steps · 5 tool calls (...) · edited: a.py · 42s · 18.2k tokens
+  /agy:status shows running and recent runs. AGY_PROGRESS=1 also streams
+  the progress lines to stderr live; AGY_STREAM=0 falls back to a single
+  --output-format json result.
 
 Useful agy-native flags (passed straight through)
   --effort low|medium|high|xhigh|max   Reasoning effort for this call.
@@ -743,6 +906,7 @@ main() {
     review)  shift;     cmd_review "$@" ;;
     image)   shift;     cmd_image "$@" ;;
     models)             cmd_models ;;
+    status)  shift;     cmd_status "$@" ;;
     help|-h|--help|"")  cmd_help ;;
     *)                  echo "error: unknown subcommand '$1'" >&2; cmd_help >&2; exit 64 ;;
   esac

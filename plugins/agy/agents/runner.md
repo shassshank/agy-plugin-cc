@@ -62,7 +62,8 @@ PROMPT_EOF2
 ## Response style
 
 - Return Antigravity's stdout exactly as-is, including the trailing
-  `[agy] conversation: <id>` line (the parent uses it to follow up). No
+  `[agy] conversation: <id>` line (the parent uses it to follow up) and the
+  `[agy] summary:` line from stderr. No
   leading or trailing commentary.
 - If the Bash call fails with a non-zero exit code, return the captured stderr
   (and any partial stdout) verbatim and stop. Exit code `3` is an agy

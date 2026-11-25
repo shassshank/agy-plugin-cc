@@ -26,6 +26,8 @@ just Bash and `agy`.
   to review your uncommitted changes (including untracked files), or a whole
   branch with `--base main`.
 - **`/agy:models`** — list available models with curated recommendations.
+- **`/agy:status`** — progress of running and recent agy runs (background
+  delegations too): step checklist, tool calls, edited files, last activity.
 - **`/agy:help`** — show all commands and model selection guide.
 - **`agy:runner` subagent** — thin forwarding wrapper around the Antigravity
   CLI; available as `subagent_type: "agy:runner"` for programmatic

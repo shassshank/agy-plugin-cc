@@ -58,6 +58,7 @@ Flags go before the prompt text; the wrapper forwards them to `agy`. A compact v
 | Prompt text starts with `/` but isn't an agy skill (e.g. a path) | `--disable-slash-commands` | letting agy expand it as one of its own slash commands |
 | User asked for restricted / unattended execution | `--sandbox` / `--dangerously-skip-permissions` | either one unprompted |
 | Long task, user wants to keep working | `--background` on `/agy:delegate` or `/agy:research` | — |
+| "How is the agy task going?" / checking a background delegation | `/agy:status` (step progress, tool calls, edited files, last activity); `/agy:status <id>` for its log | waiting blindly, or starting a second copy |
 
 ## Token efficiency
 Each handoff costs the prompt you write plus agy's full reply, which is relayed verbatim into this conversation. Keep both small:
@@ -75,6 +76,7 @@ Each handoff costs the prompt you write plus agy's full reply, which is relayed 
 - Exit `3`: model/agent error (e.g. no capacity). Relay the `[agy] error:` line; retry once or suggest another `--model`.
 - Exit `124`: print timeout hit; the reply is partial. Continue with `--conversation <id>` or retry with a longer `--print-timeout`.
 - Exit `1` "not authenticated" or `127`: tell the user to run `/agy:setup`.
+- Every run prints `[agy] conversation: <id> (started)` on stderr as soon as agy starts, so even a killed run can be resumed with `--conversation <id>`; it ends with an `[agy] summary:` line (steps, tool calls, edited files, time, tokens). Use the summary's "edited:" list instead of asking agy which files it changed.
 - `[agy] denied actions` on stderr: agy was blocked from some actions (permissions or policy). Tell the user what was skipped; don't silently retry with `--dangerously-skip-permissions`.
 
 See `/agy:help` for full flag syntax and `/agy:models` for the live model list.
