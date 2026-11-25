@@ -46,7 +46,10 @@ wrapper never waits on an open stdin:
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/agy-run.sh" review [--base <ref>] [--model <model>] </dev/null
 ```
 
-Large diffs are handed to agy as a temporary file automatically.
+Large diffs are handed to agy as a temporary file automatically. The review
+runs read-only: the wrapper denies agy's file-edit tool for the run, so agy
+reports problems instead of fixing them. To have agy fix what it found, use
+`/agy:delegate --conversation <id> fix what you found`.
 
 Pass the model's exact identifier (e.g. `claude-opus-4-6-thinking`,
 `gemini-3.8-flash-high`) or canonical display label. Run `/agy:models` to see

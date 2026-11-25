@@ -20,7 +20,11 @@ The wrapper:
 
 - Locates `agy` in `PATH`, `~/.local/bin`, `/opt/antigravity/bin`, or
   `/usr/local/bin`.
-- Verifies auth (OAuth sign-in or `GEMINI_API_KEY`).
+- Verifies auth (`GEMINI_API_KEY`/`GOOGLE_API_KEY`, `AGY_ADC_AUTH`, or a
+  Google sign-in, checked by asking `agy models` once per session).
+- With `--read-only` (a wrapper flag, not agy's), denies agy's file-edit
+  tool for the run via `--settings`. `/agy:ask` and `review` use it; a
+  delegated task does not, since it is expected to edit.
 - Reads the prompt from stdin (or positional argument) and runs `agy -p`
   non-interactively.
 - If `--model <model>` is supplied, forwards it directly to `agy`'s own
@@ -64,6 +68,9 @@ Run `agy --help` for the full list. Useful ones:
 - `--json-schema '<json>'` — enforce a structured reply (root must be an
   object schema); the wrapper prints agy's `structured_output` object.
 - `--mode plan` — agy writes a plan and stops without editing.
+- Headless runs default to Auto mode (agy 1.5.7+): workspace edits are
+  approved and commands run sandboxed. `--mode accept-edits` is the other
+  choice.
 - `--disable-slash-commands` — send a prompt starting with `/` literally.
 
 If agy reports actions it was not allowed to do, the wrapper prints

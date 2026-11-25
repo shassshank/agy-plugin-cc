@@ -24,7 +24,7 @@ Feed the prompt body to the wrapper via stdin using a single-quoted heredoc
 (`<<'PROMPT_EOF2'`) to prevent shell expansions:
 
 ```
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/agy-run.sh" ask <<'PROMPT_EOF2'
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/agy-run.sh" ask --read-only <<'PROMPT_EOF2'
 <raw prompt text, verbatim>
 PROMPT_EOF2
 ```
@@ -32,7 +32,7 @@ PROMPT_EOF2
 Or with `--model`:
 
 ```
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/agy-run.sh" ask --model <model> <<'PROMPT_EOF2'
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/agy-run.sh" ask --read-only --model <model> <<'PROMPT_EOF2'
 <raw prompt text, verbatim>
 PROMPT_EOF2
 ```
@@ -47,6 +47,10 @@ Pass the model's exact identifier (e.g. `claude-opus-4-6-thinking`,
 Run `/agy:models` to see available models and recommendations.
 
 Notes:
+
+- Always pass `--read-only`: `/agy:ask` is for questions, so agy's file-edit
+  tool is denied for the run (reads and commands still work). If the user
+  wants agy to change files, use `/agy:delegate` instead.
 
 - If the wrapper reports `agy is not installed` or `not authenticated`, stop
   and tell the user to run `/agy:setup`.

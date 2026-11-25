@@ -23,9 +23,13 @@ Then interpret the JSON output:
     fail until `agy` is installed.
 
 - If `installed: true` but `auth: missing`, tell the user to either:
-  - run `!agy` once interactively to complete OAuth (cached in the system
-    keyring), **or**
+  - run `!agy` once interactively to sign in (stored in the OS keychain),
+    **or**
   - export `GEMINI_API_KEY` (a Gemini API key) in their shell rc and reload it.
 
-- If `installed: true` and `auth` is `api-key` or `oauth`, report that
+- If `installed: true` and `auth` is `api-key`, `adc` or `oauth`, report that
   everything is ready — one short status line is enough.
+- If `auth` is `unknown`, agy could not be asked (e.g. no network); say the
+  sign-in could not be verified and that the next `/agy:*` call will tell.
+- If `warning` is non-empty, relay it (it suggests `agy update` for an agy
+  older than the plugin is tested on).

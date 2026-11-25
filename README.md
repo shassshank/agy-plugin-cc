@@ -37,8 +37,9 @@ just Bash and `agy`.
   (`/plugin marketplace add …`).
 - **Antigravity CLI (`agy`)** installed locally. `/agy:setup` can install it
   on first run.
-- **Auth** for `agy`: either OAuth sign-in (after one interactive run of
-  `agy`) or `GEMINI_API_KEY` exported in your shell.
+- **Auth** for `agy`: Google sign-in (after one interactive run of `agy`;
+  stored in the OS keychain), `GEMINI_API_KEY` exported in your shell, or
+  Application Default Credentials with `AGY_ADC_AUTH`. Tested on agy 1.5.13+.
 - **Bash** and **git** in `PATH`. macOS, Linux, or WSL.
 
 ## Install
@@ -65,7 +66,7 @@ curl -fsSL https://antigravity.google/cli/install.sh | bash
 ```
 
 If `agy` is installed but not logged in, run `agy` once interactively in your
-terminal to complete OAuth — or export `GEMINI_API_KEY`.
+terminal to sign in — or export `GEMINI_API_KEY`.
 
 ## Updating
 

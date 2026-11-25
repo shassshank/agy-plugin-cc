@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.7] - 2026-11-25
+
+Brings the plugin up to date with Antigravity CLI 1.5.16 (tested on 1.5.16).
+
+### Fixed
+- Google sign-ins were reported as "not authenticated", blocking every
+  command. agy keeps the sign-in in the OS keychain and writes a token file
+  only as a fallback, but the wrapper only looked for the file. It now asks
+  agy itself (`agy models`, about a second, cached for the session; it also
+  fills the `/agy:models` cache) and recognises `AGY_ADC_AUTH`. A signed-out
+  user still gets exit `1` at once instead of agy's 60-second login wait.
+- `/agy:review` and `/agy:ask` could edit files. Since agy 1.5.7, headless
+  runs default to Auto mode, which approves workspace edits. Reviews now
+  always run with agy's file-edit tool (`write_file`) denied through a
+  per-run `--settings` override; `/agy:ask` does the same through the new
+  wrapper flag `--read-only`. Your own `permissions` rules are kept. Pass
+  your own `--settings` to replace the guard.
+- `/agy:models` gave `xhigh` models (Gemini 4 Hydrogen XHigh) a generic
+  description and called `high` the strongest tier even when `xhigh` exists.
+
+### Added
+- `/agy:setup` warns when agy is older than 1.5.13, which could report a
+  successful run as an error (exit `3`) after a retried model request.
+- Docs cover Auto mode, `--mode accept-edits`, `--settings`, the
+  `-r`/`--resume` aliases (1.5.16) and the newer `acp`/`mic-serve`
+  subcommands.
+
+### Changed
+- Model guidance names Gemini 4 Hydrogen (`gemini-4-hydrogen-high` /
+  `-xhigh`) instead of the Gemini Pro ids that agy no longer offers.
+
 ## [0.0.6] - 2026-11-09
 
 Makes Claude's use of the plugin cheaper and covers newer agy 1.5 features.

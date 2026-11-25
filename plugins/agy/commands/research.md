@@ -44,9 +44,9 @@ Then invoke the `agy:runner` subagent with that prompt as
 - Do NOT strip `--model <name>`. Preserve `--model <name>` at the front of the
   prompt text handed to the `agy:runner` subagent so runner can forward it to
   the wrapper script. If no model is given, omit `--model` entirely and let
-  `agy` use its own default (a reasoning-strong model such as a `gemini-*-pro-*`
-  id, when `agy models` lists one, or `claude-opus-4-6-thinking` works well for
-  research).
+  `agy` use its own default (for an explicit pick, the top Gemini tier `agy models`
+  lists, such as `gemini-4-hydrogen-xhigh`, or `claude-opus-4-6-thinking`
+  works well for research).
 
 Models can be specified by exact id (e.g. `claude-opus-4-6-thinking`,
 `gemini-3.8-flash-high`) or canonical display label (e.g.

@@ -12,7 +12,7 @@ picked up automatically the next time `agy models` runs.
 import re
 import sys
 
-TIER_WORDS = {"low", "medium", "high", "thinking"}
+TIER_WORDS = {"low", "medium", "high", "xhigh", "thinking"}
 
 
 def parse(model_id):
@@ -72,7 +72,7 @@ def family_label(family):
     return " ".join(out)
 
 
-def build_blurb(family, tier, is_latest, latest_id):
+def build_blurb(family, tier, is_latest, latest_id, family_has_xhigh=False):
     label = family_label(family)
 
     if not is_latest:
@@ -90,7 +90,11 @@ def build_blurb(family, tier, is_latest, latest_id):
         return f"{oss_prefix}Fastest, cheapest tier in the {label} line. Good for simple lookups, quick edits, low-stakes work."
     if tier == "medium":
         return f"{oss_prefix}Balanced speed and quality in the {label} line. Good default for everyday tasks."
+    if tier == "xhigh":
+        return f"{oss_prefix}Maximum-effort tier in the {label} line. Best for the hardest debugging, architecture and research; slowest and most quota-hungry."
     if tier == "high":
+        if family_has_xhigh:
+            return f"{oss_prefix}Strong tier in the {label} line, below XHigh. Good default for most agentic coding tasks."
         if reasoning_family:
             return "Strongest reasoning tier here. Best for hard, multi-step problems, architecture decisions, deep research."
         return f"{oss_prefix}Strongest tier in the {label} line. Good default for most agentic coding tasks."
@@ -132,6 +136,8 @@ def main():
         if current is None or parsed[current][1] is None or version > parsed[current][1]:
             latest_in_group[key] = model_id
 
+    xhigh_families = {family for family, _, tier in parsed.values() if tier == "xhigh"}
+
     print(f"{'MODEL ID':<26} {'DISPLAY LABEL':<30} RECOMMENDED USE")
     print(f"{'--------':<26} {'-------------':<30} ---------------")
     for model_id, label in rows:
@@ -139,7 +145,7 @@ def main():
         key = (family, tier)
         latest_id = latest_in_group[key]
         is_latest = latest_id == model_id
-        blurb = build_blurb(family, tier, is_latest, latest_id)
+        blurb = build_blurb(family, tier, is_latest, latest_id, family in xhigh_families)
         print(f"{model_id:<26} {label:<30} {blurb}")
 
 

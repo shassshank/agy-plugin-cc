@@ -24,13 +24,35 @@ find_agy() {
 
 auth_status() {
   # agy reads GEMINI_API_KEY or GOOGLE_API_KEY (GOOGLE_API_KEY wins when
-  # both are set); OAuth sign-in stores a token file in its data directory.
+  # both are set), or Application Default Credentials with AGY_ADC_AUTH.
+  # Google sign-in lives in the OS keychain (macOS Keychain, Windows
+  # Credential Manager) and only falls back to a token file when the
+  # keychain is unavailable, so a missing file proves nothing: ask agy
+  # itself with `agy models`, which fails fast with "Please sign in" when
+  # signed out (an unauthenticated `agy -p` instead waits 60s for a browser
+  # login). The probe's output seeds the per-session models cache, and a
+  # cached list means this session already proved the sign-in works.
   if [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${GOOGLE_API_KEY:-}" ]; then
-    echo "api-key"
-  elif [ -s "$HOME/.gemini/antigravity-cli/antigravity-oauth-token" ]; then
+    echo "api-key"; return
+  fi
+  if [ -n "${AGY_ADC_AUTH:-}" ]; then
+    echo "adc"; return
+  fi
+  if [ -s "$HOME/.gemini/antigravity-cli/antigravity-oauth-token" ] \
+      || [ -s "$(models_cache_file)" ]; then
+    echo "oauth"; return
+  fi
+  local path out rc=0
+  path="${1:-$(find_agy | head -n1)}" || { echo "unknown"; return; }
+  out="$("$path" models 2>&1 </dev/null)" || rc=$?
+  if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q $'\t'; then
+    printf '%s\n' "$out" | grep $'\t' > "$(models_cache_file)" 2>/dev/null || true
     echo "oauth"
-  else
+  elif printf '%s' "$out" | grep -qiE 'sign in|log in|authenticat'; then
     echo "missing"
+  else
+    # Network trouble or an unexpected reply: let the real call decide.
+    echo "unknown"
   fi
 }
 
@@ -53,23 +75,99 @@ JSON
     return 0
   fi
   version="$("$path" --version 2>/dev/null | head -n1 || echo unknown)"
-  auth="$(auth_status)"
-  printf '{ "installed": true, "path": "%s", "version": "%s", "auth": "%s", "error": "" }\n' \
-    "$(j_esc "$path")" "$(j_esc "$version")" "$(j_esc "$auth")"
+  auth="$(auth_status "$path")"
+  local warning=""
+  if version_lt "$version" "$MIN_AGY_VERSION"; then
+    warning="agy $version is older than $MIN_AGY_VERSION, which this plugin is tested on; older versions can report a successful run as an error (exit 3) after a retried model request. Update with: agy update"
+  fi
+  printf '{ "installed": true, "path": "%s", "version": "%s", "auth": "%s", "warning": "%s", "error": "" }\n' \
+    "$(j_esc "$path")" "$(j_esc "$version")" "$(j_esc "$auth")" "$(j_esc "$warning")"
+}
+
+# Oldest agy release the plugin is tested on: 1.5.13 stopped reporting
+# `status: ERROR` for runs that succeeded after a retried model request.
+MIN_AGY_VERSION="1.5.13"
+
+# version_lt A B: succeeds when x.y.z version A is older than B.
+version_lt() {
+  local va="${1%%[!0-9.]*}" vb="${2%%[!0-9.]*}"
+  [ -n "$va" ] && [ -n "$vb" ] || return 1  # unparseable: don't warn
+  local IFS=.
+  local -a a=($va) b=($vb)
+  local i
+  for i in 0 1 2; do
+    local x="${a[$i]:-0}" y="${b[$i]:-0}"
+    case "$x$y" in ''|*[!0-9]*) return 1 ;; esac
+    [ "$((10#$x))" -lt "$((10#$y))" ] && return 0
+    [ "$((10#$x))" -gt "$((10#$y))" ] && return 1
+  done
+  return 1
 }
 
 require_ready() {
-  if ! path="$(find_agy)"; then
+  if ! path="$(find_agy | head -n1)"; then
     echo "error: agy is not installed." >&2
     echo "       install: curl -fsSL https://antigravity.google/cli/install.sh | bash" >&2
     exit 127
   fi
-  if [ "$(auth_status)" = "missing" ]; then
+  if [ "$(auth_status "$path")" = "missing" ]; then
     echo "error: agy is not authenticated." >&2
     echo "       run \`agy\` once interactively to sign in, or export GEMINI_API_KEY" >&2
     exit 1
   fi
   echo "$path"
+}
+
+# read_only_settings: print a JSON object for agy's per-run `--settings`
+# flag that denies the file-edit tool (`write_file`), so a review or a
+# question cannot change the working tree. Since agy 1.5.7 headless runs
+# default to Auto mode, which approves workspace edits without asking.
+# The user's own `permissions` from settings.json are carried over (in
+# case agy replaces the whole object rather than merging it). Reads and
+# shell commands stay allowed. Prints nothing when python3 is missing.
+read_only_settings() {
+  command -v python3 >/dev/null 2>&1 || return 0
+  python3 - "$HOME/.gemini/antigravity-cli/settings.json" <<'PY'
+import json, sys
+perms = {}
+try:
+    with open(sys.argv[1], encoding="utf-8-sig") as f:
+        loaded = json.load(f).get("permissions")
+    if isinstance(loaded, dict):
+        perms = loaded
+except (OSError, ValueError, AttributeError):
+    pass
+deny = [r for r in perms.get("deny", []) if isinstance(r, str)]
+if "write_file(*)" not in deny:
+    deny.append("write_file(*)")
+perms["deny"] = deny
+print(json.dumps({"permissions": perms}, separators=(",", ":")))
+PY
+}
+
+# has_settings_flag <args...>: succeeds when the caller already passed
+# --settings (theirs wins; the read-only guard is then not added).
+has_settings_flag() {
+  local a
+  for a in "$@"; do
+    case "$a" in --settings|--settings=*) return 0 ;; esac
+  done
+  return 1
+}
+
+# add_read_only_guard <args...>: set READ_ONLY_ARGS to the extra agy args
+# that block file edits (empty when the caller passed its own --settings,
+# or python3 is missing).
+add_read_only_guard() {
+  READ_ONLY_ARGS=()
+  if has_settings_flag "$@"; then
+    echo "[wrapper] --settings was passed; not adding the read-only edit guard." >&2
+    return 0
+  fi
+  local settings
+  settings="$(read_only_settings)"
+  [ -n "$settings" ] && READ_ONLY_ARGS=(--settings "$settings")
+  return 0
 }
 
 # run_agy <agy-path> <agy args...>
@@ -224,8 +322,10 @@ cmd_models() {
 cmd_ask() {
   local model=""
   local model_flag_seen=0
+  local read_only=0
   while [ $# -gt 0 ]; do
     case "$1" in
+      --read-only) read_only=1; shift ;;
       --model)
         model_flag_seen=1
         if [ $# -ge 2 ]; then
@@ -266,6 +366,10 @@ cmd_ask() {
 
   local path
   path="$(require_ready)"
+  if [ "$read_only" -eq 1 ]; then
+    add_read_only_guard "$@"
+    set -- "$@" "${READ_ONLY_ARGS[@]+"${READ_ONLY_ARGS[@]}"}"
+  fi
   if [ -n "$model" ]; then
     run_agy "$path" -p "$prompt" --model "$model" "$@"
   else
@@ -379,6 +483,10 @@ cmd_review() {
   else
     full=$(printf '%s\n\nDiff:\n```diff\n%s\n```\n' "$focus" "$diff")
   fi
+
+  # A reviewer must not edit the tree it reviews.
+  add_read_only_guard "$@"
+  set -- "$@" "${READ_ONLY_ARGS[@]+"${READ_ONLY_ARGS[@]}"}"
 
   local rc=0
   local default_print_timeout="15m"
@@ -551,7 +659,9 @@ cmd_help() {
 
 Slash commands
   /agy:setup                            Verify agy install + auth. Offers install if missing.
-  /agy:ask [--model M] <prompt>         One-shot prompt; returns agy's response verbatim.
+  /agy:ask [--model M] [--read-only] <prompt>
+                                        One-shot prompt; returns agy's response verbatim.
+                                        /agy:ask passes --read-only (file edits blocked).
   /agy:delegate [--background] [--model M] <task>
                                         Hand a task to the agy:runner subagent.
   /agy:research [--background] [--model M] <topic>
@@ -559,6 +669,7 @@ Slash commands
   /agy:review [--model M] [--base REF] [focus]
                                         Review uncommitted changes (incl. untracked
                                         files), or everything since REF with --base.
+                                        Always read-only: agy's file-edit tool is denied.
   /agy:image [--model M] [--name S] [--output P] <description>
                                         Generate an image via agy's built-in tool.
   /agy:models                           List available models with recommended use cases.
@@ -592,7 +703,8 @@ Follow-ups (multi-turn)
 
 Useful agy-native flags (passed straight through)
   --effort low|medium|high|xhigh|max   Reasoning effort for this call.
-  --conversation <id>                  Continue a previous conversation.
+  --conversation <id>                  Continue a previous conversation
+                                       (agy 1.5.16 aliases: -r, --resume).
   --add-dir <path>                     Add a directory to agy's workspace.
   --sandbox                            Run with terminal restrictions.
   --print-timeout 10m                  Cap the run. Defaults: review 15m,
@@ -604,6 +716,11 @@ Useful agy-native flags (passed straight through)
                                        --conversation <id> "proceed".
   --disable-slash-commands             Send a prompt that starts with "/"
                                        literally instead of as an agy skill.
+  --mode accept-edits|auto             Headless runs default to auto (agy
+                                       1.5.7+): workspace edits approved,
+                                       commands sandboxed.
+  --settings '<json>'                  Per-run settings.json override, never
+                                       saved (replaces the read-only guard).
 
 Exit codes
   0 ok · 1 not authenticated / no diff / bad model · 3 agy model or agent
@@ -613,8 +730,9 @@ Exit codes
   127 agy not installed.
 
 Underlying CLI
-  Run `agy --help` for agy's own flags. Subcommands: agents, changelog,
-  help, install, mcp, models, plugin/plugins, remote-control, update.
+  Run `agy --help` for agy's own flags. Subcommands:
+  acp, agents, changelog, help, install, mcp, mic-serve, models,
+  plugin/plugins, remote-control, update.
 HELP
 }
 

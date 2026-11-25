@@ -20,15 +20,15 @@ read -r -d '' guide <<'GUIDE'
 agy plugin (Google Antigravity CLI) — when to use what. STATUS_LINE
 
 Commands
-- /agy:ask — one-shot question or quick second opinion; no file edits expected.
+- /agy:ask — one-shot question or quick second opinion; runs read-only (agy's file-edit tool is denied).
 - /agy:delegate — self-contained coding/refactor/debug task agy should carry out (it can edit files). Add --background when it will take minutes.
 - /agy:research — open-ended investigation needing sources; prefer --background and --effort high.
-- /agy:review — independent review of uncommitted changes (untracked files included); --base main for a whole branch. Give focus text when the user has a concern.
+- /agy:review — independent, read-only review of uncommitted changes (untracked files included); --base main for a whole branch. Give focus text when the user has a concern.
 - /agy:image — any generated image (the only image-generation path); --output <path> to place it in the project (format converted to match the extension).
 - /agy:models — check the live model list before naming a model you are unsure exists.
 
 Flags (put them before the prompt text; they are forwarded to agy)
-- --model <id>: only when the user asks or the task clearly needs it. Fast/cheap: gemini-*-flash-*; hardest reasoning: gemini-*-pro-high or claude-opus-*-thinking; second opinion from another family: gpt-oss-*. Otherwise omit and let agy choose.
+- --model <id>: only when the user asks or the task clearly needs it. Fast/cheap: gemini-*-flash-*; strong default: gemini-4-hydrogen-high; hardest reasoning: gemini-4-hydrogen-xhigh or claude-opus-*-thinking; second opinion from another family: gpt-oss-*. Otherwise omit and let agy choose.
 - --effort low|medium|high|xhigh|max: low for lookups/trivial edits, high for debugging, architecture, research and reviews of risky code; omit for ordinary tasks.
 - --conversation <id>: ALWAYS use for follow-ups on earlier agy work ("now also…", "fix what you found"). Every reply ends with "[agy] conversation: <id>" — reuse that id instead of re-sending context. Never use -c/--continue: it resumes the user's most recent agy conversation, which may be their own terminal session.
 - --print-timeout <dur>: review defaults to 15m and image to 10m; ask/delegate/research have no limit. Set one (e.g. 20m) for delegations that must not run unbounded; 0 = no limit.
@@ -36,6 +36,7 @@ Flags (put them before the prompt text; they are forwarded to agy)
 - --json-schema '<object schema>': when you need machine-readable output; the wrapper prints the structured object.
 - --sandbox: only if the user asks for restricted execution. --dangerously-skip-permissions: only on explicit user request.
 - --mode plan: for "plan first, don't edit yet" work; agy writes a plan and stops. To carry it out, follow up with --conversation <id> "proceed" (without --mode plan).
+- Headless agy runs in Auto mode (workspace edits approved, commands sandboxed), so /agy:delegate edits files without asking; use --mode plan when the user wants to approve first.
 - --disable-slash-commands: when the prompt text starts with "/" but is not an agy skill (e.g. a path); otherwise agy expands it as one of its own slash commands.
 
 Efficiency
