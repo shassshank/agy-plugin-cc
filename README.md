@@ -14,9 +14,10 @@ just Bash and `agy`.
 - **`/agy:setup`** — verify `agy` is installed and authenticated; can install
   it for you if it is missing.
 - **`/agy:ask [--model <model>] <prompt>`** — one-shot prompt through `agy -p`;
-  returns the raw response.
+  returns the raw response. Read-only: agy can't edit your files.
 - **`/agy:delegate [--background] [--model <model>] <task>`** — hand a task
-  to the `agy:runner` subagent. `--background` for long jobs.
+  to the `agy:runner` subagent; agy edits files as needed. `--background`
+  for long jobs.
 - **`/agy:research [--background] [--model <model>] <topic>`** — delegate a
   deep-research investigation; wraps the topic in a structured prompt and
   routes through `agy:runner`.
@@ -24,11 +25,12 @@ just Bash and `agy`.
   `image-generator` subagent (Imagen under the hood).
 - **`/agy:review [--model <model>] [--base <ref>] [focus]`** — ask Antigravity
   to review your uncommitted changes (including untracked files), or a whole
-  branch with `--base main`.
+  branch with `--base main`. Read-only: agy reports problems, it doesn't fix
+  them.
 - **`/agy:models`** — list available models with curated recommendations.
-- **`/agy:status`** — progress of running and recent agy runs (background
+- **`/agy:status [--all] [<id>]`** — progress of running and recent agy runs (background
   delegations too): step checklist, tool calls, edited files, last activity.
-- **`/agy:cleanup`** — remove this session's finished agy run records
+- **`/agy:cleanup [--stop] [--all] [<id>]`** — remove this session's finished agy run records
   (`--stop` also ends its running runs). Claude runs it itself when it is
   done with agy for a task.
 - **`/agy:help`** — show all commands and model selection guide.
@@ -134,6 +136,38 @@ Ask agy to look at this file and suggest a simpler design.
 The plugin's selection rules route through the `agy:runner` subagent
 automatically.
 
+### See progress, then clean up
+
+Every run prints its conversation id the moment agy starts and ends with a
+one-line summary:
+
+```text
+[agy] conversation: 298deab3-… (started) — progress: ~/.cache/agy-plugin-cc/runs/….log
+…agy's reply…
+[agy] conversation: 298deab3-… (follow up with --conversation 298deab3-…)
+[agy] summary: 5/5 steps · 5 tool calls (write_file×2, read_file×2, run_command×1) · edited: f1.txt, f2.txt · 25s · 22.5k tokens
+```
+
+Check on running or background work at any time:
+
+```text
+/agy:status                      # running runs + those finished in the last hour
+/agy:status 298deab3-…           # one run's timestamped progress log
+```
+
+```text
+running   298deab3-… · started 14s ago · updated 5s ago
+  task:  Do these as separate tracked steps: 1) create f1.txt …
+  steps 1/5 — now: Create f2.txt · 2 tool calls · edited: f1.txt, f2.txt
+  last:  → write_file f2.txt
+```
+
+When the agy work for a task is done, Claude runs `/agy:cleanup` on its own
+to remove the finished run records it created. You can run it too:
+`--stop` also ends this session's runs that are still going, and `--all`
+clears records from every session. agy keeps its own conversation history,
+so `--conversation <id>` follow-ups still work after cleanup.
+
 ### Review the current diff
 
 Stage or make some changes, then:
@@ -157,6 +191,7 @@ a timed-out run exits `124` and can be continued with `--conversation <id>`.
 /agy:delegate --model claude-opus-4-6-thinking write a high-coverage test for the cache layer
 /agy:ask --model claude-opus-4-6-thinking "explain Go's escape analysis"
 /agy:review --model gemini-3.8-flash-high
+/agy:research --model gemini-4-hydrogen-xhigh compare CRDT libraries for offline sync
 ```
 
 Pass either the model's exact identifier (e.g. `claude-opus-4-6-thinking`,
@@ -211,12 +246,22 @@ Claude Code  →  /agy:*  →  agy:runner subagent  →  agy-run.sh  →  agy -p
   local `agy` binary, your local auth, and your local config.
 - The wrapper script
   ([`plugins/agy/scripts/agy-run.sh`](./plugins/agy/scripts/agy-run.sh))
-  handles binary discovery, auth detection, and exit codes. It also prints
-  any actions agy was denied (`[agy] denied actions`) on stderr. It runs agy in
-  JSON print mode to surface the conversation id, and exits `3` (with an
-  `[agy] error:` line) when agy reports a model/agent error such as no
-  model capacity — even in cases where agy itself exits 0 — and `124` when
-  `--print-timeout` cut the run short.
+  handles binary discovery, auth detection and exit codes. Auth is checked
+  by asking agy itself (`agy models`, once per Claude session), since a
+  Google sign-in lives in the OS keychain.
+- It runs agy with `--output-format stream-json`;
+  [`agy-stream.py`](./plugins/agy/scripts/agy-stream.py) turns the events
+  into the early conversation id, the per-run progress log behind
+  `/agy:status`, the reply and the `[agy] summary:` line. Actions agy was
+  denied are printed as `[agy] denied actions` on stderr.
+- Exit codes: `3` (with an `[agy] error:` line) when agy reports a
+  model/agent error such as no model capacity — even when agy itself exits
+  0 — or the run ended without a result; `124` when `--print-timeout` cut
+  the run short.
+- `/agy:ask` and `/agy:review` stay read-only by passing agy a per-run
+  `--settings` override that denies its file-edit tool (`write_file`),
+  keeping your own permission rules. Headless agy otherwise runs in Auto
+  mode (agy 1.5.7+), which approves workspace edits.
 - The `agy:runner` subagent is a *forwarder*: it invokes the wrapper exactly
   once per request and returns Antigravity's output verbatim. It runs on
   `haiku`, since forwarding needs no heavy reasoning. No
@@ -228,8 +273,10 @@ A `SessionStart` hook ([`session-guide.sh`](./plugins/agy/scripts/session-guide.
 adds a short "which agy command and flag to use when" guide to Claude's
 context on startup, resume, `/clear` and compaction. It tells Claude, for
 example, to reuse `--conversation <id>` for follow-ups instead of `-c`, when
-to raise `--effort`, when to use `--base` or `--json-schema`, and how to
-handle exit codes `3` and `124`. The longer version lives in the
+to raise `--effort`, when to use `--base` or `--json-schema`, how to
+handle exit codes `3` and `124`, to check background work with
+`/agy:status`, and to run `/agy:cleanup` when it is done with agy for a
+task. The longer version lives in the
 `agy:usage-guide` skill. Turn the hook off with
 `export AGY_NO_SESSION_GUIDE=1`.
 
@@ -240,6 +287,23 @@ workspaces) in `~/.gemini/antigravity-cli/settings.json`. Project-local
 `AGENTS.md` / `GEMINI.md` files are read directly by `agy`. This plugin
 doesn't override or shadow any of that — drop config files where `agy`
 expects them and they'll be picked up.
+
+Environment variables the plugin reads:
+
+| Variable | Effect |
+| :--- | :--- |
+| `AGY_PRINT_TIMEOUT` | Time limit for every call (`0` = none); overrides the review (15m) and image (10m) defaults |
+| `AGY_PROGRESS=1` | Also stream progress lines (steps, tool calls) to stderr live |
+| `AGY_STREAM=0` | Use a single `--output-format json` result instead of stream-json (no progress log or summary) |
+| `AGY_PLAIN_OUTPUT=1` | agy's raw text output, without the conversation line |
+| `AGY_REVIEW_MAX_INLINE_BYTES` | Diff size above which `/agy:review` hands agy a file (default 200000) |
+| `AGY_NO_SESSION_GUIDE=1` | Turn off the SessionStart usage guide |
+| `AGY_NO_UPDATE_CHECK=1` | Turn off the daily update check |
+
+Local files the plugin writes: run records (progress log + status JSON,
+owner-only) in `~/.cache/agy-plugin-cc/runs/`, kept two days or until
+`/agy:cleanup`; and a per-session copy of `agy models` in
+`~/.cache/agy-plugin-cc/`.
 
 The `--model <model>` flag on `/agy:ask`, `/agy:delegate`, `/agy:research`,
 `/agy:review`, and `/agy:image` forwards straight through to `agy`'s own native
@@ -262,6 +326,17 @@ Google through `agy`'s normal channels. The only other request the plugin
 makes is the daily update check — a plain download of `plugin.json` from
 `raw.githubusercontent.com` that sends nothing about you or your code
 (disable with `AGY_NO_UPDATE_CHECK=1`).
+
+### Why a Bash wrapper and not an MCP server?
+
+Starting agy costs about 2 seconds per call, which is small next to tasks
+that run for minutes, so a long-running server gains little. Plugin
+commands and skills only load into Claude's context when used, while MCP
+tool definitions sit there in every session. And a reply on Google's
+developer forum (not confirmed as official) says that wrapping `agy -p` in
+an MCP server for third-party agents is not permitted, while running it
+from your own scripts is ordinary CLI use. Check Antigravity's current
+terms for your account.
 
 ### Can I keep using Antigravity outside this plugin?
 

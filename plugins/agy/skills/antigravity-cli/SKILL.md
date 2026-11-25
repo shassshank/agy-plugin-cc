@@ -95,7 +95,9 @@ codes:
 - `127` — `agy` binary not found.
 - `1` — not authenticated, no diff found (`review` subcommand), or `agy`
   itself rejected the model (see its stderr).
-- `3` — agy hit a model or agent error mid-run (e.g. `No capacity available
+- `3` — agy hit a model or agent error mid-run, or the run ended without
+  a result (agy was killed; resume it with `--conversation <id>` from the
+  `(started)` line) (e.g. `No capacity available
   for model …`); stderr has `[agy] error:` / `AGY_ERROR:` and any partial
   response is still on stdout.
 - `124` — agy hit `--print-timeout`; the reply is partial. Follow up with

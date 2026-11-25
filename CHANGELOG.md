@@ -18,6 +18,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Run records now note the Claude session and wrapper process that started
   them.
 
+### Changed
+- `agy:usage-guide` skill: covers `/agy:status` and `/agy:cleanup` (also in
+  its trigger description), a "Read-only vs. editing" section (`/agy:ask`
+  and `/agy:review` read-only, delegate/research editing in Auto mode,
+  `--mode plan` to approve first), and no longer mentions Pro tiers.
+- `/agy:delegate` and `/agy:research` tell Claude to keep the
+  `[agy] summary:` line, check background runs with `/agy:status`, and run
+  `/agy:cleanup` when done.
+- README: read-only notes, a "See progress, then clean up" section,
+  updated "How it works", an environment-variable table, the local files
+  the plugin writes, and a "Why not an MCP server?" FAQ. The plugin README
+  layout and the landing page (now ten command tiles) list the new
+  commands and scripts.
+
 ## [0.0.8] - 2026-11-25
 
 Live progress for agy runs, built on agy's `--output-format stream-json`.

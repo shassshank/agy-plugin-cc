@@ -35,6 +35,16 @@ recommendations.
 ## Response style
 
 The subagent is a thin wrapper around `agy`. Return its output verbatim — no
-extra commentary before or after.
+extra commentary before or after. Keep the `[agy] conversation:` line and the
+`[agy] summary:` line (steps, tool calls, edited files, time, tokens); use the
+summary's `edited:` list rather than asking agy what it changed.
+
+- agy edits files without asking here (headless Auto mode). If the user wants
+  to approve first, forward `--mode plan`, then follow up with
+  `--conversation <id> proceed`.
+- While a `--background` delegation runs, check on it with `/agy:status`
+  instead of starting a second copy.
+- Once the delegated work is finished and relayed, run `/agy:cleanup` to
+  remove this session's finished run records.
 
 If the user did not supply a task, ask what they would like Antigravity to do.

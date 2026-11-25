@@ -1,6 +1,6 @@
 ---
 name: usage-guide
-description: Use when deciding whether to delegate a task to the agy plugin (Google Antigravity CLI) instead of handling it directly, or when picking which agy command, model, or flag (--effort, --conversation, --print-timeout, --base, --json-schema) to use.
+description: Use when deciding whether to delegate a task to the agy plugin (Google Antigravity CLI) instead of handling it directly, when picking which agy command, model, or flag (--effort, --conversation, --print-timeout, --base, --json-schema, --mode) to use, when checking on a running or background agy task (/agy:status), or when finishing agy work and cleaning up (/agy:cleanup).
 ---
 
 # agy Usage Guide
@@ -22,15 +22,23 @@ Decision aid for delegating tasks from Claude Code to Google Antigravity CLI (`a
 ## Follow-ups
 Every `/agy:ask`, `/agy:delegate`, `/agy:research` and `/agy:review` run ends with `[agy] conversation: <id>`. Pass `--conversation <id>` on the next call to continue that agy conversation with its full history ("now also fix the tests", "expand section 2") instead of re-sending context.
 
+## Read-only vs. editing
+- `/agy:ask` and `/agy:review` run read-only: the wrapper denies agy's file-edit tool (`write_file`) for the run. Reads and shell commands still work, so this guards against edits but is not a sandbox.
+- `/agy:delegate` and `/agy:research` can edit. Headless agy runs in Auto mode (agy 1.5.7+): workspace edits are approved and commands run in agy's terminal sandbox.
+- User wants to approve before agy edits: `--mode plan` first, then `--conversation <id>` "proceed".
+- User wants agy to fix what a review found: `/agy:delegate --conversation <review id> fix what you found`.
+
 ## Command-to-task mapping
 | Command | Task Shape |
 | :--- | :--- |
-| `/agy:ask` | One-shot Q&A, conceptual questions, and quick second opinions. |
-| `/agy:delegate` | Discrete, self-contained coding, refactoring, or debugging tasks. |
+| `/agy:ask` | One-shot Q&A, conceptual questions, and quick second opinions. Read-only: agy's file-edit tool is denied. |
+| `/agy:delegate` | Discrete, self-contained coding, refactoring, or debugging tasks. agy edits files without asking (Auto mode). |
 | `/agy:research` | Structured codebase and topic investigations, with optional background support. |
-| `/agy:review` | Independent review of uncommitted changes (incl. untracked files), or a whole branch with `--base main`. |
+| `/agy:review` | Independent, read-only review of uncommitted changes (incl. untracked files), or a whole branch with `--base main`. |
 | `/agy:image` | Prompt-based image and visual asset generation via Imagen. |
 | `/agy:models` | Inspect live available models with curated use-case blurbs. |
+| `/agy:status` | Progress of running and recent agy runs, background delegations included; `/agy:status <id>` for one run's log. |
+| `/agy:cleanup` | Remove this session's finished run records once the agy work is done (`--stop` ends a run of yours you no longer need). |
 | `/agy:help` | Command reference, invocation syntax, and flag documentation. |
 
 ## Model-selection strategy
@@ -66,7 +74,7 @@ Each handoff costs the prompt you write plus agy's full reply, which is relayed 
 - **Reuse conversations**: follow-ups go through `--conversation <id>`; never re-send context agy already has.
 - **Reference, don't paste**: give file paths and let agy read the repo (`--add-dir` for outside paths). Don't paste file contents or diffs; `/agy:review` collects the diff itself.
 - **Ask for compact output**: request a short summary or a list of changed files, or use `--json-schema` for exactly the fields you need.
-- **Match model and effort to the task**: a flash model with `--effort low` for lookups and trivial edits. Reserve `high`/`xhigh`/`max` and the Pro/Opus tiers for genuinely hard problems.
+- **Match model and effort to the task**: a flash model with `--effort low` for lookups and trivial edits. Reserve `high`/`xhigh`/`max` and the top model tiers (`*-xhigh`, Opus) for genuinely hard problems.
 - **Don't block on long work**: `--background` on `/agy:delegate` and `/agy:research`, with `--print-timeout` to bound runaway runs.
 - **Plan before big edits**: `--mode plan` lets you check agy's approach cheaply before it touches files.
 - The `agy:runner` subagent runs on `haiku` because it only forwards one wrapper call. Don't give it reasoning work.

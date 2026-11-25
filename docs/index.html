@@ -537,7 +537,7 @@
 <section id="features">
   <div class="container">
     <p class="section-eyebrow">Features</p>
-    <h2 class="section-title">Eight commands. <span class="grad">One subagent.</span></h2>
+    <h2 class="section-title">Ten commands. <span class="grad">One subagent.</span></h2>
     <p class="section-lede">
       Each tile is one entry point. Talk to Claude naturally or call the slash command directly.
     </p>
@@ -551,7 +551,7 @@
       <div class="tile">
         <span class="tile-cmd">/agy:ask</span>
         <h3 class="tile-title">One-shot prompt</h3>
-        <p class="tile-desc">Send a single prompt to <code class="inline">agy</code> and get the answer back verbatim. Continue the same agy conversation with <code class="inline">--conversation &lt;id&gt;</code>.</p>
+        <p class="tile-desc">Send a single prompt to <code class="inline">agy</code> and get the answer back verbatim, read-only. Continue the same agy conversation with <code class="inline">--conversation &lt;id&gt;</code>.</p>
       </div>
       <div class="tile">
         <span class="tile-cmd">/agy:delegate</span>
@@ -571,12 +571,22 @@
       <div class="tile">
         <span class="tile-cmd">/agy:review</span>
         <h3 class="tile-title">Second-opinion review</h3>
-        <p class="tile-desc">Send your uncommitted changes (untracked files included), or a whole branch with <code class="inline">--base main</code>, to <code class="inline">agy</code> for a steerable review.</p>
+        <p class="tile-desc">Send your uncommitted changes (untracked files included), or a whole branch with <code class="inline">--base main</code>, to <code class="inline">agy</code> for a steerable, read-only review.</p>
       </div>
       <div class="tile">
         <span class="tile-cmd">/agy:models</span>
         <h3 class="tile-title">Pick the right model</h3>
         <p class="tile-desc">Live list of every model <code class="inline">agy</code> supports, each with a curated one-line recommendation for when to use it.</p>
+      </div>
+      <div class="tile">
+        <span class="tile-cmd">/agy:status</span>
+        <h3 class="tile-title">Watch progress</h3>
+        <p class="tile-desc">See running and recent agy runs, background delegations included: step checklist, tool calls, edited files and the latest activity.</p>
+      </div>
+      <div class="tile">
+        <span class="tile-cmd">/agy:cleanup</span>
+        <h3 class="tile-title">Clean up after</h3>
+        <p class="tile-desc">Remove the session's finished run records when the work is done. Claude runs it on its own; <code class="inline">--stop</code> ends runs you no longer need.</p>
       </div>
       <div class="tile">
         <span class="tile-cmd">/agy:help</span>
@@ -605,6 +615,10 @@
           <li>
             <strong>Claude knows which options to use.</strong>
             <span>A session-start guide tells Claude which <code class="inline">/agy:*</code> command and flags fit each task — <code class="inline">--effort</code>, <code class="inline">--base</code>, <code class="inline">--json-schema</code>, timeouts — and how to handle errors.</span>
+          </li>
+          <li>
+            <strong>See what agy is doing.</strong>
+            <span>Every run reports its conversation id at launch and ends with a summary of steps, tool calls and edited files. <code class="inline">/agy:status</code> shows background work as it happens.</span>
           </li>
           <li>
             <strong>Follow-ups keep their context.</strong>

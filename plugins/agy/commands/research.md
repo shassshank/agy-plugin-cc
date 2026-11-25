@@ -56,6 +56,11 @@ recommendations.
 ## Response style
 
 Return the subagent's output verbatim — no extra commentary before or
-after.
+after, keeping the `[agy] conversation:` and `[agy] summary:` lines.
+
+- While a `--background` investigation runs, check on it with `/agy:status`
+  instead of starting a second copy.
+- Once the research is relayed and no follow-up is pending, run
+  `/agy:cleanup` to remove this session's finished run records.
 
 If the user did not supply a topic, ask what they want researched.

@@ -227,7 +227,8 @@ run_agy_stream() {
 }
 
 # run_agy <agy-path> <agy args...>
-# Runs agy in JSON print mode so the conversation id can be surfaced for
+# Runs agy in stream-json print mode (run_agy_stream; AGY_STREAM=0 uses a
+# single JSON result instead) so the conversation id can be surfaced for
 # follow-ups (`--conversation <id>`), then prints the plain response text
 # (or the `structured_output` object when --json-schema was used).
 # Falls back to agy's native text output when python3 is missing, when the
